@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Messenger 即時聊天室</title>
+<meta name="description" content="純 HTML + Tailwind CSS + 原生 JavaScript 打造的 Messenger 風格即時聊天前端，訊息儲存在瀏覽器 localStorage。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%230084ff' d='M16 3C8.8 3 3 8.3 3 14.8c0 3.7 1.8 7 4.7 9.2v5l4.3-2.4c1.3.4 2.6.6 4 .6 7.2 0 13-5.3 13-11.8S23.2 3 16 3z'/%3E%3Cpath fill='%23fff' d='M7.4 19.2l3.8-6 2.1 2.1 3.9-2.1 3.6 6-2.1-2.1-3.9 2.1z'/%3E%3C/svg%3E">
+
+<!-- 字型：Inter（英文 / 數字）+ Noto Sans TC（中文） -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- Tailwind CSS（CDN 版，方便直接開啟預覽） -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+<!-- 自訂樣式 -->
+<link rel="stylesheet" href="css/styles.css">
+
+<!-- 先套用已儲存的主題，避免載入時閃一下白畫面 -->
+<script>
+  try {
+    var saved = JSON.parse(localStorage.getItem('messenger-clone-v1') || 'null');
+    if (saved && saved.prefs && saved.prefs.theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) { /* 忽略 */ }
+</script>
+</head>
+<body>
+
+<div id="app" class="app-shell">
+
+  <!-- ==================== 左側：對話清單 ==================== -->
+  <aside id="sidebar">
+    <div class="relative flex items-center gap-3 px-3.5 py-3 border-b" style="border-color:var(--border)">
+      <div id="meAvatar"></div>
+      <div class="min-w-0 flex-1">
+        <div id="meName" class="font-bold text-[15px] truncate">你</div>
+        <div id="meStatus" class="text-[11px] truncate" style="color:var(--text-3)">載入中…</div>
+      </div>
+      <button class="icon-btn muted" data-action="new-chat" title="新增聯絡人" data-icon="edit"></button>
+      <button class="icon-btn muted" data-action="toggle-settings" title="設定" data-icon="gear"></button>
+
+      <!-- 設定選單 -->
+      <div id="settingsMenu" class="popover hidden right-3 top-[62px] w-[270px] p-2">
+        <button class="menu-item" data-action="toggle-theme">
+          <span data-icon="moon" style="color:var(--brand)"></span>
+          <span>深色模式</span>
+          <span id="setThemeState" class="ml-auto text-[12px]" style="color:var(--text-3)">關閉</span>
+        </button>
+        <button class="menu-item" data-action="toggle-autoreply">
+          <span data-icon="bot" style="color:var(--brand)"></span>
+          <span>模擬對方自動回覆</span>
+          <span id="setAutoReply" class="switch ml-auto"></span>
+        </button>
+        <button class="menu-item" data-action="toggle-sound">
+          <span data-icon="bell" style="color:var(--brand)"></span>
+          <span>訊息音效</span>
+          <span id="setSound" class="switch ml-auto"></span>
+        </button>
+        <div class="my-1 h-px" style="background:var(--border)"></div>
+        <button class="menu-item" data-action="simulate-incoming">
+          <span data-icon="inbox" style="color:var(--brand)"></span>
+          <span>模擬對方傳訊息</span>
+        </button>
+        <button class="menu-item" data-action="export-data">
+          <span data-icon="download" style="color:var(--brand)"></span>
+          <span>匯出聊天備份（JSON）</span>
+        </button>
+        <button class="menu-item" data-action="reset-demo">
+          <span data-icon="refresh" style="color:var(--brand)"></span>
+          <span>載入示範資料</span>
+        </button>
+        <button class="menu-item danger" data-action="wipe-data">
+          <span data-icon="trash"></span>
+          <span>清空全部資料</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 搜尋 -->
+    <div class="px-3.5 pt-3">
+      <div class="flex items-center gap-2 rounded-full px-3 py-2" style="background:var(--panel-2)">
+        <span data-icon="search" class="flex-none" style="color:var(--text-3)" data-icon-size="18"></span>
+        <input id="convSearch" type="text" placeholder="搜尋 Messenger" autocomplete="off"
+               class="w-full bg-transparent outline-none text-[14px]">
+        <button id="btnClearSearch" class="hidden icon-btn muted" style="width:24px;height:24px" data-action="clear-search" data-icon="x" data-icon-size="16"></button>
+      </div>
+    </div>
+
+    <!-- 對話列表 -->
+    <div id="convList" class="scroll-thin flex-1 overflow-y-auto px-2.5 py-3 space-y-1"></div>
+
+    <!-- 側欄底部資訊 -->
+    <div class="px-3.5 py-2.5 border-t text-[11px] flex items-center gap-2" style="border-color:var(--border);color:var(--text-3)">
+      <span data-icon="lock" data-icon-size="14"></span>
+      <span>訊息儲存在此瀏覽器（localStorage），重新整理不會消失</span>
+    </div>
+  </aside>
+
+  <!-- ==================== 中間：聊天視窗 ==================== -->
+  <main id="chatPane">
+    <!-- 聊天室頂部 -->
+    <header id="chatHeader" class="flex items-center gap-3 px-3 py-2.5 border-b" style="border-color:var(--border);background:var(--panel)">
+      <button class="icon-btn muted md:hidden" data-action="back" title="返回清單" data-icon="back"></button>
+      <div id="chatHeaderAvatar" class="flex-none"></div>
+      <div class="min-w-0 flex-1">
+        <div id="chatHeaderName" class="font-semibold text-[15px] truncate"></div>
+        <div id="chatHeaderStatus" class="text-[12px] truncate" style="color:var(--text-3)"></div>
+      </div>
+      <button class="icon-btn" data-action="voice-call" title="語音通話（示範）" data-icon="phone"></button>
+      <button class="icon-btn" data-action="video-call" title="視訊通話（示範）" data-icon="video"></button>
+      <button class="icon-btn muted" data-action="toggle-info" title="聊天資訊" data-icon="info"></button>
+    </header>
+
+    <!-- 訊息區 -->
+    <section id="messageScroll" class="scroll-thin flex-1 overflow-y-auto px-3 py-4 sm:px-6">
+      <div id="messageList" class="flex flex-col mx-auto w-full" style="max-width:1000px"></div>
+    </section>
+
+    <!-- 回到最新訊息 -->
+    <button id="scrollBottomBtn" class="hidden absolute left-1/2 -translate-x-1/2 w-10 h-10 rounded-full flex items-center justify-center"
+            style="bottom:112px;background:var(--panel);border:1px solid var(--border);box-shadow:var(--shadow);color:var(--brand)"
+            data-action="scroll-bottom" title="回到最新訊息" data-icon="down" data-icon-size="22"></button>
+
+    <!-- 輸入區 -->
+    <div id="composer" class="relative px-3 pt-3 pb-3 sm:px-6 border-t" style="border-color:var(--border);background:var(--panel)">
+      <div id="composerAttachments" class="hidden mb-2 flex-wrap gap-2 mx-auto w-full" style="max-width:1000px"></div>
+
+      <div class="flex items-end gap-1.5 mx-auto w-full" style="max-width:1000px">
+        <!-- 附加檔案 -->
+        <div class="relative flex-none">
+          <button class="icon-btn muted" data-action="toggle-attach" title="附加檔案" data-icon="plus"></button>
+          <div id="attachMenu" class="popover hidden bottom-[48px] left-0 w-[214px] p-2">
+            <button class="menu-item" data-action="pick-image"><span data-icon="image" style="color:var(--brand)"></span><span>圖片 / 影片</span></button>
+            <button class="menu-item" data-action="pick-file"><span data-icon="paperclip" style="color:var(--brand)"></span><span>檔案</span></button>
+            <button class="menu-item" data-action="voice"><span data-icon="mic" style="color:var(--brand)"></span><span>語音訊息（示範）</span></button>
+          </div>
+        </div>
+
+        <!-- 表情符號 -->
+        <div class="relative flex-none">
+          <button class="icon-btn muted" data-action="toggle-emoji" title="表情符號" data-icon="smile"></button>
+          <div id="emojiPicker" class="popover hidden bottom-[48px] left-0 w-[326px] p-2">
+            <div id="emojiTabs" class="flex gap-1 mb-1"></div>
+            <div id="emojiGrid" class="emoji-grid scroll-thin overflow-y-auto" style="max-height:216px"></div>
+          </div>
+        </div>
+
+        <!-- 貼圖 / GIF -->
+        <div class="relative flex-none">
+          <button class="icon-btn muted" data-action="toggle-sticker" title="貼圖" data-icon="sticker"></button>
+          <div id="stickerMenu" class="popover hidden bottom-[48px] left-0 w-[304px] p-3">
+            <div class="text-[12px] mb-2" style="color:var(--text-3)">點一下送出大貼圖</div>
+            <div id="stickerGrid" class="emoji-grid"></div>
+          </div>
+        </div>
+
+        <!-- 文字輸入 -->
+        <div class="composer-field">
+          <textarea id="msgInput" rows="1" placeholder="Aa" autocomplete="off"></textarea>
+          <button class="icon-btn muted flex-none" data-action="voice" title="語音訊息（示範）" data-icon="mic"></button>
+        </div>
+
+        <button id="sendBtn" class="send-btn flex-none" data-action="send" title="傳送（Enter）" data-icon="thumbsUp"></button>
+      </div>
+
+      <input type="file" id="fileInput" multiple class="hidden">
+      <input type="file" id="imageInput" accept="image/*" multiple class="hidden">
+    </div>
+
+    <!-- 沒有選擇對話時的空狀態 -->
+    <div id="chatEmpty" class="hidden flex-1 flex flex-col items-center justify-center text-center px-6" style="background:var(--chat-bg)">
+      <div class="w-20 h-20 rounded-full flex items-center justify-center" style="background:var(--brand-soft);color:var(--brand)">
+        <span data-icon="chat" data-icon-size="38"></span>
+      </div>
+      <h2 class="mt-5 text-xl font-bold">選擇一個聊天室開始對話</h2>
+      <p class="mt-2 text-[14px] max-w-[380px]" style="color:var(--text-2)">從左側挑選聯絡人，或按右上角的 ✏️ 新增一位新朋友。所有訊息都會儲存在你的瀏覽器裡。</p>
+    </div>
+  </main>
+
+  <!-- ==================== 右側：聊天資訊 ==================== -->
+  <aside id="infoPanel">
+    <header class="flex items-center gap-2 px-3 py-3 border-b" style="border-color:var(--border)">
+      <button class="icon-btn muted" data-action="toggle-info" title="關閉" data-icon="x"></button>
+      <strong class="text-[15px]">聊天資訊</strong>
+    </header>
+
+    <div class="scroll-thin flex-1 overflow-y-auto px-4 py-5">
+      <div class="text-center">
+        <div id="infoAvatar" class="flex justify-center"></div>
+        <div id="infoName" class="mt-3 font-bold text-[17px]"></div>
+        <div id="infoPresence" class="text-[12px] mt-0.5" style="color:var(--text-3)"></div>
+        <div id="infoAbout" class="mt-2 text-[13px]" style="color:var(--text-2)"></div>
+      </div>
+
+      <!-- 快速動作 -->
+      <div class="flex justify-center gap-7 mt-5">
+        <div class="flex flex-col items-center gap-1">
+          <button class="icon-btn" data-action="voice-call" data-icon="phone" data-icon-size="22"></button>
+          <span class="text-[11px]" style="color:var(--text-3)">語音</span>
+        </div>
+        <div class="flex flex-col items-center gap-1">
+          <button class="icon-btn" data-action="video-call" data-icon="video" data-icon-size="22"></button>
+          <span class="text-[11px]" style="color:var(--text-3)">視訊</span>
+        </div>
+        <div class="flex flex-col items-center gap-1">
+          <button class="icon-btn muted" data-action="pin-conv" data-icon="pin" data-icon-size="22"></button>
+          <span class="text-[11px]" style="color:var(--text-3)">置頂</span>
+        </div>
+        <div class="flex flex-col items-center gap-1">
+          <button class="icon-btn muted" data-action="mute-conv" data-icon="bellOff" data-icon-size="22"></button>
+          <span class="text-[11px]" style="color:var(--text-3)">靜音</span>
+        </div>
+      </div>
+
+      <!-- 通知設定 -->
+      <div class="mt-6 space-y-1">
+        <button class="menu-item" data-action="mute-conv">
+          <span data-icon="bellOff" style="color:var(--brand)"></span>
+          <span>靜音通知</span>
+          <span id="infoMuteSwitch" class="switch ml-auto"></span>
+        </button>
+        <button class="menu-item" data-action="pin-conv">
+          <span data-icon="pin" style="color:var(--brand)"></span>
+          <span>置頂對話</span>
+          <span id="infoPinSwitch" class="switch ml-auto"></span>
+        </button>
+      </div>
+
+      <!-- 搜尋聊天記錄 -->
+      <div class="mt-6">
+        <div class="text-[12px] font-semibold mb-2" style="color:var(--text-2)">搜尋聊天記錄</div>
+        <div class="flex items-center gap-2 rounded-full px-3 py-2" style="background:var(--panel-2)">
+          <span data-icon="search" class="flex-none" style="color:var(--text-3)" data-icon-size="16"></span>
+          <input id="infoSearch" type="text" placeholder="輸入關鍵字" autocomplete="off" class="w-full bg-transparent outline-none text-[13px]">
+          <button id="infoSearchClear" class="hidden icon-btn muted" style="width:22px;height:22px" data-action="clear-chat-search" data-icon="x" data-icon-size="14"></button>
+        </div>
+        <div id="infoSearchBar" class="hidden mt-2 flex items-center gap-2 text-[12px]" style="color:var(--text-2)">
+          <span id="infoSearchCount">0 筆結果</span>
+          <div class="ml-auto flex items-center gap-1">
+            <button class="icon-btn muted" style="width:26px;height:26px" data-action="search-prev" data-icon="up" data-icon-size="16"></button>
+            <button class="icon-btn muted" style="width:26px;height:26px" data-action="search-next" data-icon="down" data-icon-size="16"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 圖片 -->
+      <div class="mt-6">
+        <div class="flex items-center justify-between">
+          <div class="text-[12px] font-semibold" style="color:var(--text-2)">圖片</div>
+          <span id="infoMediaCount" class="text-[11px]" style="color:var(--text-3)"></span>
+        </div>
+        <div id="infoMedia" class="grid grid-cols-3 gap-1.5 mt-2"></div>
+      </div>
+
+      <!-- 檔案 -->
+      <div class="mt-5">
+        <div class="text-[12px] font-semibold" style="color:var(--text-2)">檔案</div>
+        <div id="infoFiles" class="mt-2 space-y-1"></div>
+      </div>
+
+      <!-- 危險操作 -->
+      <div class="mt-6 space-y-1">
+        <button class="menu-item" data-action="clear-conv">
+          <span data-icon="eraser" style="color:var(--brand)"></span>
+          <span>清除聊天記錄</span>
+        </button>
+        <button class="menu-item danger" data-action="delete-conv">
+          <span data-icon="trash"></span>
+          <span>刪除對話</span>
+        </button>
+      </div>
+
+      <div id="infoStats" class="mt-5 text-[11px] leading-relaxed" style="color:var(--text-3)"></div>
+    </div>
+  </aside>
+</div>
+
+<!-- 遮罩（平板 / 手機的資訊欄） -->
+<div id="scrim"></div>
+
+<!-- 通知 -->
+<div id="toasts" class="fixed left-1/2 z-[95] flex flex-col items-center gap-2"
+     style="bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);pointer-events:none"></div>
+
+<!-- 新增聯絡人 -->
+<div id="newChatModal" class="modal">
+  <div class="modal-card">
+    <div class="flex items-center justify-between">
+      <h2 class="text-[17px] font-bold">新增聯絡人</h2>
+      <button class="icon-btn muted" data-action="close-modal" data-icon="x"></button>
+    </div>
+    <div class="mt-4 space-y-3 text-left">
+      <label class="block">
+        <span class="text-[12px]" style="color:var(--text-2)">名稱</span>
+        <input id="ncName" type="text" placeholder="例如：王小美" class="w-full mt-1 px-3.5 py-2.5 rounded-xl border outline-none text-[14px]"
+               style="border-color:var(--border);background:var(--panel-2)">
+      </label>
+      <label class="block">
+        <span class="text-[12px]" style="color:var(--text-2)">狀態 / 簡介</span>
+        <input id="ncAbout" type="text" placeholder="例如：一起打羽球的朋友" class="w-full mt-1 px-3.5 py-2.5 rounded-xl border outline-none text-[14px]"
+               style="border-color:var(--border);background:var(--panel-2)">
+      </label>
+      <div>
+        <span class="text-[12px]" style="color:var(--text-2)">頭像顏色</span>
+        <div id="ncHues" class="flex flex-wrap gap-2 mt-2"></div>
+      </div>
+    </div>
+    <div class="mt-5 flex justify-end gap-2">
+      <button class="px-4 py-2.5 rounded-full text-[14px] font-semibold" style="background:var(--hover)" data-action="close-modal">取消</button>
+      <button class="px-5 py-2.5 rounded-full text-[14px] font-semibold text-white" style="background:var(--brand)" data-action="create-contact">建立對話</button>
+    </div>
+  </div>
+</div>
+
+<!-- 通話中（示範） -->
+<div id="callModal" class="modal">
+  <div class="modal-card text-center" style="max-width:330px">
+    <div id="callAvatar" class="flex justify-center pulse-ring rounded-full"></div>
+    <div id="callName" class="mt-4 font-bold text-[17px]"></div>
+    <div id="callStatus" class="text-[13px] mt-1" style="color:var(--text-2)">撥號中…</div>
+    <div class="mt-7 flex justify-center gap-4">
+      <button class="icon-btn muted" data-action="call-mute" title="靜音" data-icon="mic"></button>
+      <button class="icon-btn muted" data-action="call-video" title="視訊" data-icon="video"></button>
+      <button class="w-12 h-12 rounded-full flex items-center justify-center text-white" style="background:var(--danger)"
+              data-action="hangup" title="掛斷" data-icon="phoneOff" data-icon-size="22"></button>
+    </div>
+  </div>
+</div>
+
+<!-- 圖片放大 -->
+<div id="lightbox" class="modal">
+  <div class="flex flex-col items-center gap-4">
+    <img id="lightboxImg" alt="" class="rounded-2xl" style="max-width:92vw;max-height:76vh;box-shadow:var(--shadow)">
+    <div class="flex gap-2">
+      <a id="lightboxDownload" download class="px-5 py-2.5 rounded-full text-[14px] font-semibold text-white" style="background:var(--brand)">下載圖片</a>
+      <button class="px-5 py-2.5 rounded-full text-[14px] font-semibold text-white" style="background:rgba(255,255,255,.18)" data-action="close-modal">關閉</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/store.js"></script>
+<script src="js/bot.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

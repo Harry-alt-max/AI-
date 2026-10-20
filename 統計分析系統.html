@@ -1,0 +1,2166 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>統計分析系統 · 回歸 / 點估計 / 分配 / 可信度</title>
+<style>
+  :root{
+    --bg:#f4f6fb;
+    --card:#ffffff;
+    --ink:#1f2430;
+    --muted:#6b7280;
+    --line:#e6e8f0;
+    --accent:#4f46e5;
+    --accent2:#7c3aed;
+    --good:#16a34a;
+    --warn:#f59e0b;
+    --bad:#dc2626;
+    --blue:#2563eb;
+    --shadow:0 6px 24px rgba(31,36,48,.08);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:linear-gradient(180deg,#eef1fa 0%, #f7f8fc 320px, var(--bg) 100%);
+    color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    font-size:14px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:22px 18px 60px}
+
+  header.top{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+  .logo{
+    width:46px;height:46px;border-radius:13px;flex:none;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:grid;place-items:center;color:#fff;font-size:22px;
+    box-shadow:0 8px 20px rgba(79,70,229,.35);
+  }
+  header.top h1{margin:0;font-size:20px;letter-spacing:.2px}
+  header.top p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+
+  .layout{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start}
+  @media(max-width:940px){.layout{grid-template-columns:1fr}}
+
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);
+  }
+  .card .hd{
+    padding:13px 16px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px;font-weight:650;font-size:14px;
+  }
+  .card .bd{padding:14px 16px}
+  .card .hd .pill{margin-left:auto;font-weight:600;font-size:11.5px;color:var(--muted);
+    background:#f1f2f7;border-radius:99px;padding:3px 9px}
+
+  /* ---------- input panel ---------- */
+  textarea{
+    width:100%;min-height:190px;resize:vertical;
+    border:1px solid var(--line);border-radius:10px;padding:11px 12px;
+    font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:13px;
+    line-height:1.6;color:var(--ink);background:#fbfbfe;outline:none;
+  }
+  textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+  textarea.small{min-height:138px}
+  .splitgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .splitgrid > div{min-width:0}
+  .seg{display:inline-flex;background:#f1f2f7;border-radius:9px;padding:3px;gap:2px}
+  .segbtn{border:none;background:transparent;border-radius:7px;padding:6px 12px;
+    font-size:12.5px;font-weight:650;color:var(--muted);cursor:pointer;transition:.15s}
+  .segbtn:hover{color:var(--ink);background:transparent;border:none}
+  .segbtn.active{background:#fff;color:var(--accent);box-shadow:0 1px 4px rgba(31,36,48,.14)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .row + .row{margin-top:10px}
+  label.mini{font-size:12px;color:var(--muted);font-weight:600}
+  select{
+    border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:#fff;
+    font-size:13px;color:var(--ink);outline:none;
+  }
+  select:focus{border-color:var(--accent)}
+  button{
+    cursor:pointer;font-family:inherit;font-size:13px;font-weight:650;
+    border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--ink);
+    padding:8px 12px;transition:.15s;
+  }
+  button:hover{border-color:#cfd3e4;background:#f7f8fd}
+  button.primary{
+    background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;
+    box-shadow:0 6px 16px rgba(79,70,229,.28);
+  }
+  button.primary:hover{filter:brightness(1.06)}
+  button.ghost{background:#f4f5fb}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .tag{display:inline-block;font-size:11px;font-weight:700;border-radius:99px;padding:2px 9px}
+  .tag.g{background:#e7f7ee;color:#15803d}
+  .tag.b{background:#e8effd;color:#1d4ed8}
+  .tag.y{background:#fff4e2;color:#b45309}
+  .tag.r{background:#fdeaea;color:#b91c1c}
+
+  /* ---------- summary strip ---------- */
+  .strip{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px}
+  @media(max-width:940px){.strip{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:560px){.strip{grid-template-columns:repeat(2,1fr)}}
+  .kpi{
+    background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 13px;
+    box-shadow:var(--shadow);min-height:74px;display:flex;flex-direction:column;justify-content:center;
+  }
+  .kpi .k{font-size:11.5px;color:var(--muted);font-weight:650;letter-spacing:.2px}
+  .kpi .v{font-size:19px;font-weight:750;margin-top:3px;font-variant-numeric:tabular-nums}
+  .kpi .s{font-size:11px;color:var(--muted);margin-top:1px}
+
+  /* ---------- tabs ---------- */
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{
+    border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 14px;
+    font-size:13px;font-weight:650;cursor:pointer;color:var(--muted);transition:.15s;
+    user-select:none;
+  }
+  .tab:hover{color:var(--ink)}
+  .tab.active{
+    background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent;
+    box-shadow:0 6px 16px rgba(79,70,229,.25);
+  }
+  .panel{display:none}
+  .panel.active{display:block;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  .grid.one{grid-template-columns:1fr}
+  @media(max-width:940px){.grid{grid-template-columns:1fr}}
+
+  /* ---------- tables ---------- */
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--muted);font-weight:700;font-size:11.5px;letter-spacing:.3px;
+    text-transform:uppercase;background:#fafaff}
+  tbody tr:hover{background:#fafbff}
+  td.mono{font-family:ui-monospace,Consolas,monospace}
+  .sig{color:var(--good);font-weight:750}
+  .nsig{color:var(--muted)}
+  .warnv{color:var(--warn);font-weight:700}
+  .badv{color:var(--bad);font-weight:700}
+
+  /* ---------- charts ---------- */
+  canvas.chart{width:100%;display:block}
+  .chartbox{height:250px}
+  .chartbox.sm{height:210px}
+
+  /* ---------- equation ---------- */
+  .eq{
+    font-family:ui-monospace,Consolas,monospace;font-size:14.5px;background:#f6f5ff;
+    border:1px dashed #cfcaf7;border-radius:10px;padding:12px 14px;color:#3730a3;
+    word-break:break-word;line-height:1.7;
+  }
+  .note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
+  .kv{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:13px;
+      font-variant-numeric:tabular-nums}
+  .kv .kl{color:var(--muted)}
+  .kv .kr{font-weight:700;text-align:right}
+
+  /* ---------- gauge ---------- */
+  .gaugewrap{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+  .gauge{
+    --p:0;--c:var(--accent);
+    width:132px;height:132px;border-radius:50%;flex:none;position:relative;
+    background:conic-gradient(var(--c) calc(var(--p)*1%), #e9ebf3 0);
+    transition:background .5s ease;
+  }
+  .gauge::after{
+    content:"";position:absolute;inset:13px;border-radius:50%;background:#fff;
+    box-shadow:inset 0 2px 8px rgba(31,36,48,.06);
+  }
+  .gauge .gv{
+    position:absolute;inset:0;display:grid;place-items:center;z-index:2;flex-direction:column;
+    text-align:center;
+  }
+  .gauge .gv b{font-size:30px;line-height:1;font-weight:800}
+  .gauge .gv span{font-size:11px;color:var(--muted);display:block;margin-top:2px}
+  .subscores{display:grid;gap:9px;flex:1;min-width:240px}
+  .sub{display:grid;grid-template-columns:88px 1fr 42px;gap:10px;align-items:center;font-size:12.5px}
+  .bar{height:9px;border-radius:99px;background:#eceef6;overflow:hidden}
+  .bar > i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .5s}
+  .sub .sv{text-align:right;font-weight:750;font-variant-numeric:tabular-nums}
+
+  .empty{padding:34px 16px;text-align:center;color:var(--muted);font-size:13px}
+  .kbd{font-family:ui-monospace,Consolas,monospace;background:#f1f2f7;border-radius:5px;
+       padding:1px 6px;font-size:12px;border:1px solid var(--line)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:6px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  input.num{
+    width:76px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;
+    font-size:13px;font-family:ui-monospace,Consolas,monospace;color:var(--ink);
+    background:#fff;outline:none;
+  }
+  input.num:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+  .dropzone{
+    border:1.5px dashed #c9cee2;border-radius:10px;padding:10px 12px;
+    background:#fafbff;display:flex;align-items:center;gap:10px;
+    transition:.15s;cursor:pointer;width:100%;
+  }
+  .dropzone.over{border-color:var(--accent);background:#f2f1ff}
+  .dropText{font-size:12px;color:var(--muted)}
+  .pairs{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .minibox{display:inline-flex;align-items:center;gap:5px}
+  .minibox.hid{display:none}
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+    background:#1f2430;color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;
+    opacity:0;pointer-events:none;transition:.25s;z-index:99;box-shadow:0 10px 30px rgba(0,0,0,.25)
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="logo">📊</div>
+    <div>
+      <h1>統計分析系統</h1>
+      <p>輸入數字 → 自動產生 <b>回歸模型</b>、<b>點估計</b>、<b>資料分配</b> 與 <b>資料可信度</b></p>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ============ INPUT ============ -->
+    <div class="card" style="position:sticky;top:16px">
+      <div class="hd">✍️ 輸入資料 <span class="pill" id="inputBadge">等待輸入</span></div>
+      <div class="bd">
+        <textarea id="dataInput" spellcheck="false" placeholder="每行一筆，或用逗號/空白分隔。&#10;&#10;單欄範例：&#10;12&#10;15&#10;18&#10;21&#10;19&#10;&#10;雙欄 (X,Y) 範例：&#10;1, 12&#10;2, 15&#10;3, 18&#10;4, 23&#10;5, 27"></textarea>
+
+        <div class="row" style="margin-top:10px">
+          <label class="mini">輸入方式</label>
+          <div class="seg" id="inputModeSeg">
+            <button type="button" class="segbtn active" data-im="combined">合併輸入</button>
+            <button type="button" class="segbtn" data-im="splitXY">X / Y 分開</button>
+            <button type="button" class="segbtn" data-im="splitXYZ">X / Y / Z 分開</button>
+          </div>
+        </div>
+
+        <div id="splitInputs" style="display:none;margin-top:10px">
+          <div class="splitgrid" id="splitGrid">
+            <div>
+              <label class="mini">X 值（自變數）</label>
+              <textarea id="xInput" class="small" spellcheck="false" placeholder="1&#10;2&#10;3&#10;4&#10;5&#10;6"></textarea>
+            </div>
+            <div>
+              <label class="mini">Y 值（應變數）</label>
+              <textarea id="yInput" class="small" spellcheck="false" placeholder="12&#10;15&#10;18&#10;23&#10;27&#10;31"></textarea>
+            </div>
+            <div id="zWrap" style="display:none">
+              <label class="mini">Z 值（自變數 2）</label>
+              <textarea id="zInput" class="small" spellcheck="false" placeholder="3&#10;5&#10;7&#10;9&#10;11&#10;13"></textarea>
+            </div>
+          </div>
+          <div class="hint" id="splitHint">兩欄請輸入相同筆數，系統會依序配對 (X₁,Y₁)、(X₂,Y₂)…。每行一個數字，也可用逗號分隔。</div>
+        </div>
+
+        <div class="row" style="margin-top:10px;align-items:stretch">
+          <label class="mini">📁 上傳檔案</label>
+          <div class="dropzone" id="dropZone">
+            <input type="file" id="fileInput" accept=".csv,.txt,.tsv" hidden>
+            <button type="button" class="ghost" id="fileBtn">📂 選擇檔案</button>
+            <span class="dropText">或直接把 .csv / .txt 拖曳到這裡</span>
+          </div>
+          <div class="hint" id="fileStatus"></div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <label class="mini" id="modeLabel">資料型態</label>
+          <select id="modeSel">
+            <option value="auto">自動偵測</option>
+            <option value="single">單變數</option>
+            <option value="pair">雙變數 (X, Y)</option>
+          </select>
+          <label class="mini">回歸階數</label>
+          <select id="degSel">
+            <option value="1">1 · 線性</option>
+            <option value="2">2 · 二次</option>
+            <option value="3">3 · 三次</option>
+            <option value="4">4 · 四次</option>
+          </select>
+        </div>
+
+        <div class="row" style="margin-top:12px">
+          <button class="primary" id="runBtn">▶ 開始分析</button>
+          <button class="ghost" id="clearBtn">🧹 清除資料</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="ghost" data-demo="normal">範例：常態</button>
+          <button class="ghost" data-demo="linear">範例：線性</button>
+          <button class="ghost" data-demo="skew">範例：偏態</button>
+          <button class="ghost" data-demo="outlier">範例：離群值</button>
+        </div>
+
+        <div class="hint">
+          單欄資料會自動以 <span class="kbd">1,2,3,…</span> 當作 X 做趨勢回歸。<br>
+          支援小數、負數。無效文字會被忽略並計入「資料完整度」。
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ RESULTS ============ -->
+    <div>
+      <div id="results">
+        <!-- KPI strip -->
+        <div class="strip" id="kpiStrip"></div>
+
+        <!-- tabs -->
+        <div class="tabs" id="tabs">
+          <div class="tab active" data-tab="desc">📊 描述統計</div>
+          <div class="tab" data-tab="est">🎯 點估計</div>
+          <div class="tab" data-tab="reg">📈 回歸模型</div>
+          <div class="tab" data-tab="dist">📉 資料分配</div>
+          <div class="tab" data-tab="tail">🎲 分配尾端</div>
+          <div class="tab" data-tab="anova">⚖️ ANOVA</div>
+          <div class="tab" data-tab="cred">🛡️ 資料可信度</div>
+        </div>
+
+        <!-- DESC -->
+        <div class="panel active" data-panel="desc">
+          <div class="grid">
+            <div class="card"><div class="hd">集中趨勢 (Central Tendency)</div>
+              <div class="bd"><div class="kv" id="kCenter"></div></div></div>
+            <div class="card"><div class="hd">離散程度 (Dispersion)</div>
+              <div class="bd"><div class="kv" id="kDisp"></div></div></div>
+            <div class="card"><div class="hd">形狀與位置 (Shape &amp; Position)</div>
+              <div class="bd"><div class="kv" id="kShape"></div></div></div>
+            <div class="card"><div class="hd">資料品質</div>
+              <div class="bd"><div class="kv" id="kQual"></div></div></div>
+          </div>
+        </div>
+
+        <!-- EST -->
+        <div class="panel" data-panel="est">
+          <div class="card" style="margin-bottom:16px">
+            <div class="hd">🎯 母體參數點估計與信賴區間</div>
+            <div class="bd"><div style="overflow:auto"><table id="estTable"></table></div>
+              <div class="note">點估計是「用樣本算出的單一數值」，信賴區間則表達這個估計的<b>精確度</b>。區間越窄代表估計越可靠。</div>
+            </div>
+          </div>
+          <div class="grid">
+            <div class="card"><div class="hd">拔靴法 (Bootstrap) 信賴區間 <span class="pill">1,500 次重抽樣</span></div>
+              <div class="bd"><div style="overflow:auto"><table id="bootTable"></table></div>
+                <div class="note">不需假設常態分配，利用重複抽樣直接估計母體統計量的抽樣分配。</div></div></div>
+            <div class="card"><div class="hd">信賴區間寬度比較</div>
+              <div class="bd"><canvas id="ciCanvas" class="chart chartbox sm"></canvas>
+                <div class="legend"><span><i style="background:#4f46e5"></i>95% 信賴區間</span><span><i style="background:#a5b4fc"></i>99% 信賴區間</span></div></div></div>
+          </div>
+        </div>
+
+        <!-- REG -->
+        <div class="panel" data-panel="reg">
+          <div class="card" style="margin-bottom:16px">
+            <div class="hd">📈 回歸模型摘要</div>
+            <div class="bd">
+              <div class="eq" id="regEq">—</div>
+              <div class="grid" style="margin-top:14px">
+                <div style="overflow:auto"><table id="regFitTable"></table></div>
+                <div style="overflow:auto"><table id="regCoefTable"></table></div>
+              </div>
+              <div class="note" id="regNote"></div>
+            </div>
+          </div>
+          <div class="grid">
+            <div class="card"><div class="hd">散布圖與迴歸曲線</div>
+              <div class="bd"><canvas id="scatterCanvas" class="chart chartbox"></canvas></div></div>
+            <div class="card"><div class="hd">殘差圖 (Residual Plot)</div>
+              <div class="bd"><canvas id="residCanvas" class="chart chartbox"></canvas></div></div>
+          </div>
+        </div>
+
+        <!-- DIST -->
+        <div class="panel" data-panel="dist">
+          <div class="grid">
+            <div class="card"><div class="hd">直方圖 + 常態曲線</div>
+              <div class="bd"><canvas id="histCanvas" class="chart chartbox"></canvas></div></div>
+            <div class="card"><div class="hd">核密度估計 (KDE)</div>
+              <div class="bd"><canvas id="kdeCanvas" class="chart chartbox"></canvas></div></div>
+            <div class="card"><div class="hd">箱型圖 (Box Plot)</div>
+              <div class="bd"><canvas id="boxCanvas" class="chart chartbox sm"></canvas></div></div>
+            <div class="card"><div class="hd">Q-Q 圖 (常態性)</div>
+              <div class="bd"><canvas id="qqCanvas" class="chart chartbox sm"></canvas></div></div>
+          </div>
+          <div class="card" style="margin-top:16px">
+            <div class="hd">常態性檢定 (Normality Tests)</div>
+            <div class="bd">
+              <div style="overflow:auto"><table id="normTable"></table></div>
+              <div class="note" id="normNote"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CRED -->
+        <div class="panel" data-panel="cred">
+          <div class="card" style="margin-bottom:16px">
+            <div class="hd">🛡️ 資料可信度總分 <span class="pill" id="credLevel">—</span></div>
+            <div class="bd">
+              <div class="gaugewrap">
+                <div class="gauge" id="gauge"><div class="gv"><b id="gaugeVal">—</b><span>/ 100 分</span></div></div>
+                <div class="subscores" id="subscores"></div>
+              </div>
+              <div class="note" id="credNote"></div>
+            </div>
+          </div>
+          <div class="grid">
+            <div class="card"><div class="hd">子項目評分</div>
+              <div class="bd"><canvas id="credCanvas" class="chart chartbox"></canvas></div></div>
+            <div class="card"><div class="hd">風險與建議 (Data Quality Report)</div>
+              <div class="bd"><div id="credReport"></div></div></div>
+          </div>
+        </div>
+
+        <!-- TAIL -->
+        <div class="panel" data-panel="tail">
+          <div class="card" style="margin-bottom:16px">
+            <div class="hd">🎲 分配尾端機率（左尾 / 右尾 / 雙尾）</div>
+            <div class="bd">
+              <div class="row">
+                <label class="mini">分配</label>
+                <select id="tailDist">
+                  <option value="normal">常態分配 N(μ, σ²)</option>
+                  <option value="t">t 分配</option>
+                  <option value="chi2">卡方分配 χ²</option>
+                  <option value="f">F 分配</option>
+                </select>
+                <span class="pairs" id="tailParams">
+                  <span class="minibox hid" id="tbDf1"><label class="mini">自由度 ν</label><input id="tailDf1" class="num" type="number" value="10" min="1" step="1"></span>
+                  <span class="minibox hid" id="tbDf2"><label class="mini">ν₂</label><input id="tailDf2" class="num" type="number" value="10" min="1" step="1"></span>
+                  <span class="minibox hid" id="tbMu"><label class="mini">μ</label><input id="tailMu" class="num" type="number" value="0" step="any"></span>
+                  <span class="minibox hid" id="tbSd"><label class="mini">σ</label><input id="tailSd" class="num" type="number" value="1" min="0.0001" step="any"></span>
+                </span>
+              </div>
+              <div class="row" style="margin-top:10px">
+                <label class="mini">臨界值 x</label>
+                <input id="tailX" class="num" type="number" value="1.96" step="any">
+                <label class="mini">反向面積 α</label>
+                <input id="tailArea" class="num" type="number" value="0.05" min="0" max="1" step="0.01">
+                <button class="ghost" id="tailLeftQ">Q(α) 左尾</button>
+                <button class="ghost" id="tailRightQ">Q(1−α) 右尾</button>
+              </div>
+            </div>
+          </div>
+          <div class="grid">
+            <div class="card"><div class="hd">尾端區域圖</div>
+              <div class="bd"><canvas id="tailCanvas" class="chart chartbox"></canvas>
+                <div class="legend"><span><i style="background:#4f46e5"></i>左尾 P(X≤x)</span><span><i style="background:#dc2626"></i>右尾 P(X&gt;x)</span><span><i style="background:#16a34a"></i>臨界值 x</span></div></div></div>
+            <div class="card"><div class="hd">機率結果</div>
+              <div class="bd"><div style="overflow:auto"><table id="tailTable"></table></div>
+                <div class="note">面積輸入 α 後按「Q(α) 左尾」→ 求 P(X≤x)=α 的 x；按「Q(1−α) 右尾」→ 求 P(X≥x)=α 的 x。</div>
+                <div style="overflow:auto;margin-top:12px"><table id="tailQuantTable"></table></div>
+                <div class="note" id="tailNote"></div></div></div>
+          </div>
+        </div>
+
+        <!-- ANOVA -->
+        <div class="panel" data-panel="anova">
+          <div class="grid">
+            <div class="card"><div class="hd">⚖️ 單因子變異數分析 (One-Way ANOVA)</div>
+              <div class="bd">
+                <textarea id="anovaInput" spellcheck="false" placeholder="每行一組，組內用逗號/空白分隔。&#10;&#10;組 A：&#10;5, 6, 7, 6, 5&#10;組 B：&#10;8, 9, 7, 8, 9&#10;組 C：&#10;11, 12, 10, 11, 12"></textarea>
+                <div class="row" style="margin-top:8px">
+                  <button class="primary" id="anovaBtn">計算 ANOVA</button>
+                  <button class="ghost" data-anovademo="1">範例 A/B/C</button>
+                  <button class="ghost" data-anovademo="2">範例 不等樣本</button>
+                </div>
+                <div class="hint">每行 = 一組 → 檢定各組平均數是否相等。虛無假設 H₀：μ₁=μ₂=…=μₖ。此頁工具獨立於左側資料。</div>
+              </div></div>
+            <div class="card"><div class="hd">變異數分析表</div>
+              <div class="bd"><div style="overflow:auto"><table id="anovaTable"></table></div>
+                <div class="note" id="anovaNote"></div></div></div>
+          </div>
+          <div class="grid" style="margin-top:16px">
+            <div class="card"><div class="hd">各組摘要</div>
+              <div class="bd"><div style="overflow:auto"><table id="anovaGroupTable"></table></div></div></div>
+            <div class="card"><div class="hd">各組箱型圖</div>
+              <div class="bd"><canvas id="anovaBoxCanvas" class="chart chartbox sm"></canvas></div></div>
+          </div>
+          <div class="card" style="margin-top:16px;display:none" id="tukeyCard">
+            <div class="hd">事後比較：Tukey HSD（成對比較）</div>
+            <div class="bd"><div style="overflow:auto"><table id="tukeyTable"></table></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================================
+   0. 數學工具
+   ========================================================================= */
+function gammaln(xx){
+  const cof=[76.18009172947146,-86.50532032941677,24.01409824083091,
+             -1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
+  let y=xx, tmp=xx+5.5;
+  tmp-=(xx+0.5)*Math.log(tmp);
+  let ser=1.000000000190015;
+  for(let j=0;j<6;j++) ser+=cof[j]/++y;
+  return -tmp+Math.log(2.5066282746310005*ser/xx);
+}
+function betacf(a,b,x){
+  const MAXIT=300,EPS=3e-14,FPMIN=1e-300;
+  const qab=a+b,qap=a+1,qam=a-1;
+  let c=1,d=1-qab*x/qap;
+  if(Math.abs(d)<FPMIN)d=FPMIN;
+  d=1/d; let h=d;
+  for(let m=1;m<=MAXIT;m++){
+    const m2=2*m;
+    let aa=m*(b-m)*x/((qam+m2)*(a+m2));
+    d=1+aa*d; if(Math.abs(d)<FPMIN)d=FPMIN;
+    c=1+aa/c; if(Math.abs(c)<FPMIN)c=FPMIN;
+    d=1/d; h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));
+    d=1+aa*d; if(Math.abs(d)<FPMIN)d=FPMIN;
+    c=1+aa/c; if(Math.abs(c)<FPMIN)c=FPMIN;
+    d=1/d;
+    const del=d*c; h*=del;
+    if(Math.abs(del-1)<EPS)break;
+  }
+  return h;
+}
+function betai(a,b,x){
+  if(x<=0)return 0;
+  if(x>=1)return 1;
+  const bt=Math.exp(gammaln(a+b)-gammaln(a)-gammaln(b)+a*Math.log(x)+b*Math.log(1-x));
+  return x<(a+1)/(a+b+2) ? bt*betacf(a,b,x)/a : 1-bt*betacf(b,a,1-x)/b;
+}
+function gser(a,x){
+  const ITMAX=300,EPS=3e-14; let ap=a,sum=1/a,del=sum;
+  for(let n=1;n<=ITMAX;n++){ ap++; del*=x/ap; sum+=del; if(Math.abs(del)<Math.abs(sum)*EPS)break; }
+  return sum*Math.exp(-x+a*Math.log(x)-gammaln(a));
+}
+function gcf(a,x){
+  const ITMAX=300,EPS=3e-14,FPMIN=1e-300;
+  let b=x+1-a,c=1/FPMIN,d=1/b,h=d;
+  for(let i=1;i<=ITMAX;i++){
+    const an=-i*(i-a); b+=2;
+    d=an*d+b; if(Math.abs(d)<FPMIN)d=FPMIN;
+    c=b+an/c; if(Math.abs(c)<FPMIN)c=FPMIN;
+    d=1/d; const del=d*c; h*=del;
+    if(Math.abs(del-1)<EPS)break;
+  }
+  return Math.exp(-x+a*Math.log(x)-gammaln(a))*h;
+}
+function gammap(a,x){ if(x<=0||a<=0)return 0; return x<a+1?gser(a,x):1-gcf(a,x); }
+function chi2cdf(x,df){ return x<=0?0:gammap(df/2,x/2); }
+
+function erf(x){
+  const s=Math.sign(x); x=Math.abs(x);
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const t=1/(1+p*x);
+  const y=1-((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return s*y;
+}
+function normCdf(x,mu,sd){ mu=mu||0; sd=sd||1; return 0.5*(1+erf((x-mu)/(sd*Math.SQRT2))); }
+function normPdf(x,mu,sd){ mu=mu||0; sd=sd||1; return Math.exp(-0.5*Math.pow((x-mu)/sd,2))/(sd*Math.sqrt(2*Math.PI)); }
+function normInv(p){
+  const a=[-3.969683028665376e1,2.209460984245205e2,-2.759285104469687e2,1.38357751867269e2,-3.066479806614716e1,2.506628277459239];
+  const b=[-5.447609879822406e1,1.615858368580409e2,-1.556989798598866e2,6.680131188771972e1,-1.328068155288572e1];
+  const c=[-7.784894002430293e-3,-3.223964580411365e-1,-2.400758277161838,-2.549732539343734,4.374664141464968,2.938163982698783];
+  const d=[7.784695709041462e-3,3.224671290700398e-1,2.445134137142996,3.754408661907416];
+  const pl=0.02425, ph=1-pl; let q,r;
+  if(p<pl){ q=Math.sqrt(-2*Math.log(p));
+    return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+  if(p<=ph){ q=p-0.5; r=q*q;
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1); }
+  q=Math.sqrt(-2*Math.log(1-p));
+  return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+}
+function tCdf(t,df){
+  if(!isFinite(t)) return t>0?1:0;
+  const x=df/(df+t*t);
+  const ib=betai(df/2,0.5,x);
+  return t>0?1-0.5*ib:0.5*ib;
+}
+function tInv(p,df){
+  let lo=-1e3,hi=1e3;
+  for(let i=0;i<160;i++){ const m=(lo+hi)/2; if(tCdf(m,df)<p) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+function fCdf(x,d1,d2){ if(x<=0)return 0; return betai(d1/2,d2/2,d1*x/(d1*x+d2)); }
+
+function tPdf(t,df){
+  return Math.exp(gammaln((df+1)/2)-gammaln(df/2))/Math.sqrt(df*Math.PI)*Math.pow(1+t*t/df,-(df+1)/2);
+}
+function chi2pdf(x,df){
+  if(x<=0) return 0;
+  return Math.exp((df/2-1)*Math.log(x)-x/2-(df/2)*Math.log(2)-gammaln(df/2));
+}
+function fPdf(x,d1,d2){
+  if(x<=0) return 0;
+  const logB=gammaln(d1/2)+gammaln(d2/2)-gammaln((d1+d2)/2);
+  return Math.exp((d1/2)*Math.log(d1/d2)+(d1/2-1)*Math.log(x)-logB-((d1+d2)/2)*Math.log(1+(d1/d2)*x));
+}
+function fInv(p,d1,d2){
+  if(p<=0) return 0;
+  if(p>=1) return Infinity;
+  let lo=0,hi=1e5;
+  for(let i=0;i<200;i++){ const m=(lo+hi)/2; if(fCdf(m,d1,d2)<p) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+// Studentized range 分配累積機率（Tukey HSD 使用）
+function studentizedRangeCdf(q,k,nu){
+  if(q<=0) return 0;
+  if(q>40) return 1;
+  const lo=-14, hi=14, steps=700, dx=(hi-lo)/steps;
+  let sum=0;
+  for(let i=0;i<=steps;i++){
+    const t=lo+i*dx;
+    const wgt=(i===0||i===steps)?1:(i%2?4:2);
+    const d=Math.max(0,Math.min(1,tCdf(t,nu)-tCdf(t-q,nu)));
+    sum+=wgt*k*tPdf(t,nu)*Math.pow(d,k-1);
+  }
+  return Math.max(0,Math.min(1,sum*dx/3));
+}
+function studentizedRangeInv(p,k,nu){
+  if(k<2||nu<1) return NaN;
+  let lo=0,hi=40;
+  for(let i=0;i<80;i++){ const m=(lo+hi)/2; if(studentizedRangeCdf(m,k,nu)<p) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+function pearson(xs,ys){
+  const n=Math.min(xs.length,ys.length);
+  if(n<2) return NaN;
+  const mx=S.mean(xs), my=S.mean(ys);
+  let sxy=0,sxx=0,syy=0;
+  for(let i=0;i<n;i++){ const dx=xs[i]-mx, dy=ys[i]-my; sxy+=dx*dy; sxx+=dx*dx; syy+=dy*dy; }
+  return Math.sqrt(sxx*syy)>0 ? sxy/Math.sqrt(sxx*syy) : NaN;
+}
+
+/* =========================================================================
+   1. 統計核心
+   ========================================================================= */
+const S = {
+  sum:a=>a.reduce((s,v)=>s+v,0),
+  mean:a=>a.reduce((s,v)=>s+v,0)/a.length,
+  quantile(sorted,p){
+    const n=sorted.length;
+    if(n===0)return NaN;
+    if(n===1)return sorted[0];
+    const h=(n-1)*p, lo=Math.floor(h), hi=Math.ceil(h);
+    return sorted[lo]+(h-lo)*(sorted[hi]-sorted[lo]);
+  },
+  variance(a,sample){
+    const n=a.length; if(n<2)return 0;
+    const m=S.mean(a);
+    const ss=a.reduce((s,v)=>s+(v-m)*(v-m),0);
+    return ss/(sample===false?n:n-1);
+  }
+};
+
+function summarize(a){
+  const n=a.length;
+  const out={n};
+  if(n===0) return out;
+  const sorted=[...a].sort((x,y)=>x-y);
+  const mean=S.mean(a);
+  const dev=a.map(v=>v-mean);
+  const m2=dev.reduce((s,v)=>s+v*v,0)/n;
+  const m3=dev.reduce((s,v)=>s+v**3,0)/n;
+  const m4=dev.reduce((s,v)=>s+v**4,0)/n;
+  const varP=m2;
+  const varS=n>1?dev.reduce((s,v)=>s+v*v,0)/(n-1):0;
+  const sdS=Math.sqrt(varS), sdP=Math.sqrt(varP);
+  const skewP=m2>0?m3/Math.pow(m2,1.5):0;
+  const kurtP=m2>0?m4/(m2*m2)-3:0;
+  const g1=skewP;
+  const skewS=n>2?Math.sqrt(n*(n-1))/(n-2)*g1:NaN;
+  const g2=kurtP;
+  const kurtS=n>3?((n+1)*g2+6)*(n-1)/((n-2)*(n-3)):NaN;
+  const q1=S.quantile(sorted,0.25), med=S.quantile(sorted,0.5), q3=S.quantile(sorted,0.75);
+  const iqr=q3-q1;
+  const freq={}; let maxf=0;
+  for(const v of a){ freq[v]=(freq[v]||0)+1; if(freq[v]>maxf)maxf=freq[v]; }
+  const modes=Object.keys(freq).filter(k=>freq[k]===maxf).map(Number);
+  const mode = maxf>1 ? modes : [];
+  // geometric / harmonic (正數才有效)
+  const allPos=a.every(v=>v>0);
+  const geo=allPos?Math.exp(a.reduce((s,v)=>s+Math.log(v),0)/n):NaN;
+  const har=allPos?a.length/a.reduce((s,v)=>s+1/v,0):NaN;
+  const se=sdS/Math.sqrt(n);
+  const cv=mean!==0?sdS/Math.abs(mean):NaN;
+  const tcrit95=n>1?tInv(0.975,n-1):NaN;
+  const tcrit99=n>1?tInv(0.995,n-1):NaN;
+  const ci95=[mean-tcrit95*se,mean+tcrit95*se];
+  const ci99=[mean-tcrit99*se,mean+tcrit99*se];
+  const z=(a.map(v=>Math.abs(v-mean)/sdS)).filter(v=>isFinite(v));
+  const outliersZ=z.filter(v=>v>3).length;
+  const loFence=q1-1.5*iqr, hiFence=q3+1.5*iqr;
+  const outliersIQR=sorted.filter(v=>v<loFence||v>hiFence);
+  const range=sorted[n-1]-sorted[0];
+  return {n,sum:S.sum(a),mean,varP,varS,sdP,sdS,se,skewP,skewS,kurtP,kurtS,
+    min:sorted[0],max:sorted[n-1],range,q1,med,q3,iqr,mode,allPos,geo,har,cv,
+    ci95,ci99,tcrit95,tcrit99,sorted,outliersZ,outliersIQR,loFence,hiFence,meanAbsDev:dev.reduce((s,v)=>s+Math.abs(v),0)/n};
+}
+
+/* ---------- 常態性檢定 ---------- */
+function normalityTests(a,st){
+  const n=a.length;
+  const res={};
+  if(n<4) return res;
+
+  // Jarque-Bera
+  const jb=n/6*(st.skewP**2 + st.kurtP**2/4);
+  res.jb={stat:jb,df:2,p:1-chi2cdf(jb,2)};
+
+  // Anderson-Darling (參數估計版)
+  let A2=0;
+  const zs=st.sorted.map(v=>(v-st.mean)/st.sdS);
+  for(let i=0;i<n;i++){
+    const Fi=Math.min(Math.max(normCdf(zs[i]),1e-12),1-1e-12);
+    const Fn=Math.min(Math.max(normCdf(zs[n-1-i]),1e-12),1-1e-12);
+    A2 += (2*i+1)/n*(Math.log(Fi)+Math.log(1-Fn));
+  }
+  A2=-n-A2;
+  const A2s=A2*(1+0.75/n+2.25/(n*n));
+  let adp;
+  if(A2s<0.2) adp=1-Math.exp(-13.436+101.14*A2s-223.73*A2s*A2s);
+  else if(A2s<0.34) adp=1-Math.exp(-8.318+42.796*A2s-59.938*A2s*A2s);
+  else if(A2s<0.6) adp=Math.exp(0.9177-4.279*A2s-1.38*A2s*A2s);
+  else adp=Math.exp(1.2937-5.709*A2s+0.0186*A2s*A2s);
+  res.ad={stat:A2s,p:Math.min(Math.max(adp,0),1)};
+
+  // 偏態 / 峰態 Z 檢定
+  const sesk=Math.sqrt(6*n*(n-1)/((n-2)*(n+1)*(n+3)));
+  const sek=Math.sqrt(24*n*(n-1)*(n-1)/((n-3)*(n-2)*(n+3)*(n+5)));
+  const zsk=st.skewS/sesk, zk=st.kurtS/sek;
+  res.skew={stat:st.skewS,se:sesk,z:zsk,p:2*(1-normCdf(Math.abs(zsk)))};
+  res.kurt={stat:st.kurtS,se:sek,z:zk,p:2*(1-normCdf(Math.abs(zk)))};
+  return res;
+}
+
+/* ---------- 迴歸 ---------- */
+function matInverse(A){
+  const n=A.length;
+  const M=A.map((row,i)=>[...row,...Array.from({length:n},(_,j)=>i===j?1:0)]);
+  for(let col=0;col<n;col++){
+    let piv=col;
+    for(let r=col+1;r<n;r++) if(Math.abs(M[r][col])>Math.abs(M[piv][col])) piv=r;
+    if(Math.abs(M[piv][col])<1e-12) return null;
+    [M[col],M[piv]]=[M[piv],M[col]];
+    const pv=M[col][col];
+    for(let j=0;j<2*n;j++) M[col][j]/=pv;
+    for(let r=0;r<n;r++){
+      if(r===col)continue;
+      const f=M[r][col];
+      if(f===0)continue;
+      for(let j=0;j<2*n;j++) M[r][j]-=f*M[col][j];
+    }
+  }
+  return M.map(r=>r.slice(n));
+}
+function olsFit(Xmat,ys){ // Xmat：每列含截距欄 1 的設計矩陣
+  const n=ys.length;
+  const p=Xmat[0].length;
+  if(n<=p) return null;
+  const ybar=S.mean(ys);
+  const XtX=Array.from({length:p},()=>new Array(p).fill(0));
+  const Xty=new Array(p).fill(0);
+  for(let i=0;i<n;i++){
+    for(let a=0;a<p;a++){
+      Xty[a]+=Xmat[i][a]*ys[i];
+      for(let b=0;b<p;b++) XtX[a][b]+=Xmat[i][a]*Xmat[i][b];
+    }
+  }
+  const inv=matInverse(XtX);
+  if(!inv) return null;
+  const beta=Array.from({length:p},(_,a)=>inv[a].reduce((s,v,b)=>s+v*Xty[b],0));
+  const fit=Xmat.map(r=>r.reduce((s,v,j)=>s+v*beta[j],0));
+  const sst=ys.reduce((s,v)=>s+(v-ybar)**2,0);
+  const sse=ys.reduce((s,v,i)=>s+(v-fit[i])**2,0);
+  const df=n-p;
+  const mse=df>0?sse/df:NaN;
+  const r2=sst>0?1-sse/sst:0;
+  const adjR2=df>0?1-(1-r2)*(n-1)/df:NaN;
+  const se=Array.from({length:p},(_,a)=>mse>0?Math.sqrt(Math.abs(mse*inv[a][a])):NaN);
+  const tval=beta.map((b,a)=>b/se[a]);
+  const pval=tval.map(t=>2*(1-tCdf(Math.abs(t),df)));
+  const ssr=sst-sse;
+  const k=p-1;
+  const fstat=df>0&&k>0?(ssr/k)/(sse/df):NaN;
+  const fp=isFinite(fstat)?1-fCdf(fstat,k,df):NaN;
+  const resid=ys.map((y,i)=>y-fit[i]);
+  const dw=resid.reduce((s,e,i)=>i===0?s:s+(e-resid[i-1])**2,0)/(resid.reduce((s,e)=>s+e*e,0)||1);
+  return {beta,fit,resid,r2,adjR2,mse,rmse:Math.sqrt(mse),se,tval,pval,fstat,fp,df,n,p,k,dw,sse,sst,ssr};
+}
+function polyFit(xs,ys,deg){
+  const X=xs.map(x=>{const r=[1];let v=x;for(let j=1;j<=deg;j++){r.push(v);v*=x;}return r;});
+  const r=olsFit(X,ys);
+  if(r) r.deg=deg;
+  return r;
+}
+function multiFit(cols,ys){ // cols：多個自變數欄位
+  const n=ys.length;
+  const X=Array.from({length:n},(_,i)=>[1,...cols.map(c=>c[i])]);
+  return olsFit(X,ys);
+}
+
+/* =========================================================================
+   2. 解析輸入
+   ========================================================================= */
+function parseInput(text){
+  const lines=text.split(/\r?\n/);
+  const rows=[]; let tokens=0,bad=0;
+  for(const line of lines){
+    const t=line.trim();
+    if(!t) continue;
+    let parts=t.split(/[,;|\t]+/).map(s=>s.trim()).filter(Boolean);
+    if(parts.length===1) parts=t.split(/\s+/).filter(Boolean);
+    if(!parts.length) continue;
+    const nums=[];
+    for(const p of parts){
+      tokens++;
+      const v=Number(p);
+      if(Number.isFinite(v)) nums.push(v); else bad++;
+    }
+    if(nums.length) rows.push(nums);
+  }
+  const maxLen=rows.reduce((m,r)=>Math.max(m,r.length),0);
+  return {rows,tokens,bad,maxLen};
+}
+
+/* =========================================================================
+   3. 格式化
+   ========================================================================= */
+function fmt(x,d){
+  d=(d===undefined)?4:d;
+  if(x===null||x===undefined||Number.isNaN(x)) return '—';
+  if(!isFinite(x)) return x>0?'∞':'-∞';
+  const a=Math.abs(x);
+  if(a!==0 && (a<1e-4||a>=1e8)) return x.toExponential(3);
+  let s=x.toFixed(d);
+  if(s.includes('.')) s=s.replace(/0+$/,'').replace(/\.$/,'');
+  if(s==='-0') s='0';
+  return s;
+}
+function fp(p){
+  if(p===null||p===undefined||Number.isNaN(p)) return '—';
+  if(p<0.0001) return '<0.0001';
+  return p.toFixed(4);
+}
+function pTag(p){
+  if(p===null||p===undefined||Number.isNaN(p)) return '<span class="nsig">—</span>';
+  if(p<0.01) return '<span class="sig">'+fp(p)+' **</span>';
+  if(p<0.05) return '<span class="sig">'+fp(p)+' *</span>';
+  if(p<0.1) return '<span class="warnv">'+fp(p)+' .</span>';
+  return '<span class="nsig">'+fp(p)+'</span>';
+}
+
+/* =========================================================================
+   4. 全域狀態
+   ========================================================================= */
+let ST=null;
+const $=id=>document.getElementById(id);
+
+function parseSeries(text){
+  const values=[]; let tokens=0,bad=0;
+  for(const line of text.split(/\r?\n/)){
+    const t=line.trim(); if(!t) continue;
+    const parts=t.split(/[,;|\t\s]+/).filter(Boolean);
+    for(const p of parts){ tokens++; const v=Number(p); if(Number.isFinite(v)) values.push(v); else bad++; }
+  }
+  return {values,tokens,bad};
+}
+function getInputMode(){
+  const b=document.querySelector('#inputModeSeg .segbtn.active');
+  return (b && b.dataset && b.dataset.im) ? b.dataset.im : 'combined';
+}
+function setInputMode(mode){
+  document.querySelectorAll('#inputModeSeg .segbtn').forEach(b=>
+    b.classList.toggle('active',b.dataset.im===mode));
+  const split = mode==='splitXY'||mode==='splitXYZ';
+  $('dataInput').style.display = split?'none':'block';
+  $('splitInputs').style.display = split?'block':'none';
+  $('modeLabel').style.display = split?'none':'inline-block';
+  $('modeSel').style.display = split?'none':'inline-block';
+  $('zWrap').style.display = mode==='splitXYZ'?'block':'none';
+  $('splitGrid').style.gridTemplateColumns = mode==='splitXYZ'?'1fr 1fr 1fr':'1fr 1fr';
+  if(mode==='splitXYZ') $('splitHint').textContent='三欄請輸入相同筆數，依序配對 (X,Y,Z)，進行複迴歸 Ŷ = b₀ + b₁X + b₂Z。';
+  else if(mode==='splitXY') $('splitHint').textContent='兩欄請輸入相同筆數，系統會依序配對 (X₁,Y₁)、(X₂,Y₂)…。每行一個數字，也可用逗號分隔。';
+}
+
+/* =========================================================================
+   5. 主分析流程
+   ========================================================================= */
+function analyze(){
+  const inputMode=getInputMode();
+  let X=[],Y=[],Z=[],isPairs=false,tokens=0,bad=0,mismatch=false;
+  let reg=null, mreg=null, mult=false;
+
+  if(inputMode==='splitXY'||inputMode==='splitXYZ'){
+    const xs=parseSeries($('xInput').value);
+    const ys=parseSeries($('yInput').value);
+    tokens=xs.tokens+ys.tokens; bad=xs.bad+ys.bad;
+    if(inputMode==='splitXYZ'){
+      const zs=parseSeries($('zInput').value);
+      tokens+=zs.tokens; bad+=zs.bad;
+      const m=Math.min(xs.values.length,ys.values.length,zs.values.length);
+      mismatch = xs.values.length!==ys.values.length || ys.values.length!==zs.values.length || xs.values.length!==zs.values.length;
+      X=xs.values.slice(0,m); Y=ys.values.slice(0,m); Z=zs.values.slice(0,m);
+      if(!m){ toast('X、Y、Z 至少各需 1 個數字'); return; }
+      if(mismatch){
+        $('splitHint').textContent='⚠️ 三欄筆數不同，已取前 '+m+' 筆配對。';
+        $('splitHint').style.color='var(--warn)';
+      } else {
+        $('splitHint').textContent='三欄各 '+m+' 筆，配對完成（複迴歸）。';
+        $('splitHint').style.color='';
+      }
+      mult=m>0;
+    } else {
+      const m=Math.min(xs.values.length,ys.values.length);
+      mismatch = xs.values.length!==ys.values.length;
+      X=xs.values.slice(0,m); Y=ys.values.slice(0,m);
+      if(!m){ toast('X 與 Y 至少各需 1 個數字'); return; }
+      if(mismatch){
+        $('splitHint').textContent='⚠️ 兩欄筆數不同（X: '+xs.values.length+' 筆、Y: '+ys.values.length+' 筆），已取前 '+m+' 筆配對分析。';
+        $('splitHint').style.color='var(--warn)';
+        toast('X / Y 筆數不一致，已取前 '+m+' 筆');
+      } else {
+        $('splitHint').textContent='兩欄各 '+m+' 筆，配對完成。';
+        $('splitHint').style.color='';
+      }
+    }
+    isPairs=true;
+  } else {
+    const parsed=parseInput($('dataInput').value);
+    if(!parsed.rows.length){ toast('請先輸入至少一個數字'); return; }
+    tokens=parsed.tokens; bad=parsed.bad;
+    const modeSel=$('modeSel').value;
+    if(modeSel==='single') isPairs=false;
+    else if(modeSel==='pair') isPairs=true;
+    else isPairs=parsed.maxLen>=2;
+
+    if(isPairs){
+      for(const r of parsed.rows){ if(r.length>=2){ X.push(r[0]); Y.push(r[1]); } }
+      if(Y.length<3) isPairs=false;
+    }
+    if(!isPairs){ Y=parsed.rows.map(r=>r[0]); X=Y.map((_,i)=>i+1); }
+  }
+
+  const st=summarize(Y);
+  let deg=parseInt($('degSel').value,10);
+  if(!isFinite(deg)||deg<1) deg=1;
+  if(deg>4) deg=4;
+
+  if(mult){
+    if(Y.length>=4) mreg=multiFit([X,Z],Y);
+  } else {
+    if(Y.length>=deg+2) reg=polyFit(X,Y,deg);
+  }
+
+  const norm=normalityTests(Y,st);
+  const validity=tokens? (tokens-bad)/tokens : 1;
+
+  ST={X,Y,Z,st,reg,mreg,norm,deg,validity,isPairs,tokens,bad,inputMode,mismatch,mult};
+
+  // badge
+  const kind = inputMode==='splitXYZ' ? 'X / Y / Z 分開'
+    : inputMode==='splitXY' ? 'X / Y 分開'
+    : (isPairs? '雙變數':'單變數');
+  $('inputBadge').textContent = kind + ' · ' + Y.length + ' 筆';
+  $('inputBadge').className='pill';
+
+  renderAll();
+  renderActiveCharts();
+}
+function renderAll(){
+  renderKPI(); renderDesc(); renderEst(); renderReg(); renderDist(); renderCred();
+}
+
+/* ---------- KPI ---------- */
+function renderKPI(){
+  if(!ST){ $('kpiStrip').innerHTML=''; return; }
+  const {st,isPairs,reg,mreg,mult}=ST;
+  const fit=mult?mreg:reg;
+  const items=[
+    ['樣本數 n', fmt(st.n,0), mult?'X、Y、Z 配對':(isPairs?'X、Y 配對':'單變數')],
+    ['平均數', fmt(st.mean), 'μ̂ 點估計'],
+    ['標準差', fmt(st.sdS), '樣本 (n-1)'],
+    ['中位數', fmt(st.med), '穩健中心'],
+    ['變異係數', Number.isFinite(st.cv)?fmt(st.cv,3):'—', 'CV = SD/|mean|'],
+    ['模型 R²', fit?fmt(fit.r2,4):'—', fit?('adj '+fmt(fit.adjR2,4)):'需雙變數']
+  ];
+  $('kpiStrip').innerHTML = items.map(([k,v,s])=>
+    '<div class="kpi"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="s">'+s+'</div></div>'
+  ).join('');
+}
+
+/* ---------- 描述統計 ---------- */
+function kv(list){
+  return list.map(([k,v])=>'<div class="kl">'+k+'</div><div class="kr">'+v+'</div>').join('');
+}
+function renderDesc(){
+  if(!ST){ ['kCenter','kDisp','kShape','kQual'].forEach(id=>$(id).innerHTML=''); return; }
+  const {st}=ST;
+  $('kCenter').innerHTML=kv([
+    ['樣本數 n',fmt(st.n,0)],
+    ['總和 Σx',fmt(st.sum,3)],
+    ['平均數 x̄',fmt(st.mean)],
+    ['中位數 Md',fmt(st.med)],
+    ['眾數 Mo',st.mode.length?st.mode.slice(0,4).map(v=>fmt(v,3)).join(', ')+(st.mode.length>4?'…':''):'無'],
+    ['幾何平均 Gm',fmt(st.geo)],
+    ['調和平均 Hm',fmt(st.har)]
+  ]);
+  $('kDisp').innerHTML=kv([
+    ['全距 Range',fmt(st.range)],
+    ['樣本變異數 s²',fmt(st.varS)],
+    ['母體變異數 σ²',fmt(st.varP)],
+    ['樣本標準差 s',fmt(st.sdS)],
+    ['母體標準差 σ',fmt(st.sdP)],
+    ['標準誤 SE',fmt(st.se)],
+    ['變異係數 CV',Number.isFinite(st.cv)?fmt(st.cv,3):'—'],
+    ['平均絕對偏差 MAD',fmt(st.meanAbsDev)]
+  ]);
+  $('kShape').innerHTML=kv([
+    ['最小值',fmt(st.min)],
+    ['Q1 (25%)',fmt(st.q1)],
+    ['Q2 中位數',fmt(st.med)],
+    ['Q3 (75%)',fmt(st.q3)],
+    ['四分位距 IQR',fmt(st.iqr)],
+    ['樣本偏態 G1',fmt(st.skewS,3)],
+    ['樣本峰態 G2',fmt(st.kurtS,3)],
+    ['離群界線','['+fmt(st.loFence,3)+', '+fmt(st.hiFence,3)+']']
+  ]);
+  const total=ST.tokens;
+  const bad=ST.bad;
+  $('kQual').innerHTML=kv([
+    ['輸入數值筆數',fmt(st.n,0)],
+    ['有效 token',fmt(total-bad,0)],
+    ['無效 token',bad?( '<span class="warnv">'+bad+'</span>' ):'0'],
+    ['資料完整度',(ST.validity*100).toFixed(1)+'%'],
+    ['IQR 離群值',st.outliersIQR.length],
+    ['Z-score 離群值 (|z|>3)',st.outliersZ],
+    ['是否含 0 / 負值',ST.Y.some(v=>v<=0)?'是':'否'],
+    ['資料型態',ST.isPairs?'X、Y 成對':'單變數序列']
+  ]);
+}
+
+/* ---------- 點估計 ---------- */
+function renderEst(){
+  if(!ST){ $('estTable').innerHTML=''; $('bootTable').innerHTML=''; return; }
+  const {st,Y,reg}=ST;
+  const rows=[];
+  const push=(param,est,se,ci95,ci99,note)=>
+    rows.push({param,est,se,ci95,ci99,note});
+
+  push('母體平均數 μ',fmt(st.mean),fmt(st.se),
+       '['+fmt(st.ci95[0])+', '+fmt(st.ci95[1])+']',
+       '['+fmt(st.ci99[0])+', '+fmt(st.ci99[1])+']',
+       't 分配，df='+(st.n-1));
+
+  push('母體中位數 M',fmt(st.med),fmt(1.253*st.sdS/Math.sqrt(st.n)),
+       '['+fmt(st.med-1.96*1.253*st.sdS/Math.sqrt(st.n),3)+', '+fmt(st.med+1.96*1.253*st.sdS/Math.sqrt(st.n),3)+']',
+       '—','近似 (常態假設)');
+
+  push('母體變異數 σ²',fmt(st.varS),'—',
+       '['+fmt(st.varS*(st.n-1)/chi2inv(0.975,st.n-1),3)+', '+fmt(st.varS*(st.n-1)/chi2inv(0.025,st.n-1),3)+']',
+       '—','卡方分配，df='+(st.n-1));
+
+  push('母體標準差 σ',fmt(st.sdS),'—','—','—','= √(σ² 點估計)');
+
+  const isBinary = Y.every(v=>v===0||v===1);
+  if(isBinary){
+    const phat=st.mean, nn=st.n;
+    const z=1.959964;
+    const denom=1+z*z/nn;
+    const center=(phat+z*z/(2*nn))/denom;
+    const half=z*Math.sqrt(phat*(1-phat)/nn+z*z/(4*nn*nn))/denom;
+    push('母體比例 p (0/1)',fmt(phat),fmt(Math.sqrt(phat*(1-phat)/nn)),
+      '['+fmt(center-half)+', '+fmt(center+half)+']','—','Wilson 區間 (較穩健)');
+  } else {
+    push('母體比例 p (0/1)','—','—','—','—','資料非 0/1 型態');
+  }
+
+  if(reg){
+    push('斜率 β₁',fmt(reg.beta[1]),fmt(reg.se[1]),
+      '['+fmt(reg.beta[1]-tInv(0.975,reg.df)*reg.se[1])+', '+fmt(reg.beta[1]+tInv(0.975,reg.df)*reg.se[1])+']',
+      '['+fmt(reg.beta[1]-tInv(0.995,reg.df)*reg.se[1])+', '+fmt(reg.beta[1]+tInv(0.995,reg.df)*reg.se[1])+']',
+      '每增加 1 單位 X 的 Y 變化');
+    push('截距 β₀',fmt(reg.beta[0]),fmt(reg.se[0]),
+      '['+fmt(reg.beta[0]-tInv(0.975,reg.df)*reg.se[0])+', '+fmt(reg.beta[0]+tInv(0.975,reg.df)*reg.se[0])+']','—','X=0 時的期望 Y');
+  }
+
+  let html='<thead><tr><th>母體參數</th><th>點估計值</th><th>標準誤</th><th>95% 信賴區間</th><th>99% 信賴區間</th><th>備註</th></tr></thead><tbody>';
+  for(const r of rows){
+    html+='<tr><td>'+r.param+'</td><td class="mono" style="font-weight:700">'+r.est+
+      '</td><td class="mono">'+r.se+'</td><td class="mono">'+r.ci95+
+      '</td><td class="mono">'+r.ci99+'</td><td style="text-align:left;color:#6b7280;font-size:12px">'+r.note+'</td></tr>';
+  }
+  $('estTable').innerHTML=html+'</tbody>';
+
+  renderBootstrap();
+}
+
+function chi2inv(p,df){
+  let lo=0,hi=1000;
+  for(let i=0;i<200;i++){ const m=(lo+hi)/2; if(chi2cdf(m,df)<p) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+
+/* ---------- Bootstrap ---------- */
+function renderBootstrap(){
+  const Y=ST.Y;
+  const B=1500;
+  const bootMean=[],bootMed=[];
+  const n=Y.length;
+  for(let b=0;b<B;b++){
+    const s=new Array(n);
+    for(let i=0;i<n;i++) s[i]=Y[(Math.random()*n)|0];
+    s.sort((a,b)=>a-b);
+    bootMean.push(s.reduce((x,y)=>x+y,0)/n);
+    bootMed.push(S.quantile(s,0.5));
+  }
+  const ci=(arr,lo,hi)=>{
+    const s=[...arr].sort((a,b)=>a-b);
+    return [S.quantile(s,lo),S.quantile(s,hi)];
+  };
+  const rows=[
+    ['平均數',S.mean(bootMean),ci(bootMean,0.025,0.975),ci(bootMean,0.005,0.995)],
+    ['中位數',S.mean(bootMed),ci(bootMed,0.025,0.975),ci(bootMed,0.005,0.995)]
+  ];
+  ST.boot={meanSE:Math.sqrt(S.variance(bootMean)),medSE:Math.sqrt(S.variance(bootMed))};
+  let html='<thead><tr><th>統計量</th><th>拔靴平均</th><th>拔靴標準誤</th><th>95% 區間</th><th>99% 區間</th></tr></thead><tbody>';
+  rows.forEach((r,i)=>{
+    const se=i===0?ST.boot.meanSE:ST.boot.medSE;
+    html+='<tr><td>'+r[0]+'</td><td class="mono">'+fmt(r[1])+'</td><td class="mono">'+fmt(se)+
+      '</td><td class="mono">['+fmt(r[2][0])+', '+fmt(r[2][1])+']</td><td class="mono">['+fmt(r[3][0])+', '+fmt(r[3][1])+']</td></tr>';
+  });
+  $('bootTable').innerHTML=html+'</tbody>';
+}
+
+/* ---------- 回歸 ---------- */
+function renderReg(){
+  if(!ST){ $('regEq').textContent=''; $('regFitTable').innerHTML=''; $('regCoefTable').innerHTML=''; $('regNote').textContent=''; return; }
+  const {deg,X,isPairs,mult}=ST;
+  const reg = mult ? ST.mreg : ST.reg;
+  if(!reg){
+    $('regEq').textContent = mult
+      ? '資料筆數不足以配適複迴歸（至少需 4 筆，且 X、Z 不可完全共線）。'
+      : '資料筆數不足以配適回歸模型（至少需要 '+(deg+2)+' 筆）。';
+    $('regFitTable').innerHTML=''; $('regCoefTable').innerHTML=''; $('regNote').textContent='';
+    return;
+  }
+  const names = mult ? ['β₀ (截距)','β₁ (X)','β₂ (Z)']
+                     : ['β₀ (截距)','β₁ (X)','β₂ (X²)','β₃ (X³)','β₄ (X⁴)'];
+  let eq='Ŷ = '+fmt(reg.beta[0],4);
+  for(let i=1;i<reg.beta.length;i++){
+    const vname = mult ? (i===1?'·X':'·Z') : ('·X'+(i>1?('^'+i):''));
+    const b=reg.beta[i];
+    eq += (b<0?' − ':' + ')+fmt(Math.abs(b),4)+vname;
+  }
+  $('regEq').textContent=eq;
+
+  $('regFitTable').innerHTML=
+    '<thead><tr><th>配適指標</th><th>數值</th></tr></thead><tbody>'+
+    '<tr><td>R²（決定係數）</td><td class="mono" style="font-weight:700">'+fmt(reg.r2,4)+'</td></tr>'+
+    '<tr><td>調整後 R²</td><td class="mono">'+fmt(reg.adjR2,4)+'</td></tr>'+
+    '<tr><td>殘差標準誤 RMSE</td><td class="mono">'+fmt(reg.rmse,4)+'</td></tr>'+
+    '<tr><td>F 統計量</td><td class="mono">'+fmt(reg.fstat,4)+'</td></tr>'+
+    '<tr><td>F 檢定 p 值</td><td class="mono">'+pTag(reg.fp)+'</td></tr>'+
+    '<tr><td>自由度 (模型, 殘差)</td><td class="mono">'+reg.k+', '+reg.df+'</td></tr>'+
+    '<tr><td>Durbin-Watson</td><td class="mono">'+fmt(reg.dw,3)+'</td></tr>'+
+    '<tr><td>SSR / SSE / SST</td><td class="mono">'+fmt(reg.ssr,2)+' / '+fmt(reg.sse,2)+' / '+fmt(reg.sst,2)+'</td></tr>'+
+    '</tbody>';
+
+  // 標準化係數（複迴歸才顯示）
+  let stdcols='';
+  let std=null;
+  if(mult){
+    std=reg.beta.map((b,j)=>{
+      if(j===0) return null;
+      const sdP=Math.sqrt(S.variance(j===1?ST.X:ST.Z));
+      return b*sdP/ST.st.sdS;
+    });
+    stdcols='<th>β* 標準化</th>';
+  }
+
+  let ch='<thead><tr><th>係數</th><th>估計值</th><th>標準誤</th><th>t 值</th><th>p 值</th>'+stdcols+'</tr></thead><tbody>';
+  for(let i=0;i<reg.beta.length;i++){
+    ch+='<tr><td>'+(names[i]||('β₀+'+i))+'</td><td class="mono">'+fmt(reg.beta[i])+'</td><td class="mono">'+fmt(reg.se[i])+
+        '</td><td class="mono">'+fmt(reg.tval[i],3)+'</td><td class="mono">'+pTag(reg.pval[i])+'</td>'+
+        (std?'<td class="mono">'+(std[i]===null?'—':fmt(std[i],3))+'</td>':'')+'</tr>';
+  }
+  $('regCoefTable').innerHTML=ch+'</tbody>';
+
+  let note='';
+  if(reg.r2>=0.9) note='模型解釋力極強（R²='+fmt(reg.r2,3)+'），現有變數能高度預測 Y。';
+  else if(reg.r2>=0.7) note='模型解釋力良好（R²='+fmt(reg.r2,3)+'）。';
+  else if(reg.r2>=0.4) note='模型解釋力中等（R²='+fmt(reg.r2,3)+'），可能遺漏其他重要變數。';
+  else note='模型解釋力偏弱（R²='+fmt(reg.r2,3)+'），建議改用其他型態或增加變數。';
+  if(reg.dw<1) note+=' Durbin-Watson='+fmt(reg.dw,2)+'，殘差疑有正自我相關。';
+  else if(reg.dw>3) note+=' Durbin-Watson='+fmt(reg.dw,2)+'，殘差疑有負自我相關。';
+  else note+=' Durbin-Watson≈2，殘差無明顯自我相關。';
+
+  if(mult){
+    const rXZ=pearson(ST.X,ST.Z);
+    note = '複迴歸：Ŷ = b₀ + b₁X + b₂Z。X 與 Z 的相關係數 r='+fmt(rXZ,3)
+      + (Math.abs(rXZ)>0.8?'，兩自變數高度相關（共線性），係數解讀須謹慎。':'，共線性輕微。')+note;
+  } else if(!isPairs){
+    note+=' 目前為單欄資料，X 以筆數序號 1…n 代入（趨勢線）。';
+  }
+  $('regNote').innerHTML=note;
+}
+
+/* ---------- 分配 ---------- */
+function renderDist(){
+  if(!ST){ $('normTable').innerHTML=''; $('normNote').textContent=''; return; }
+  const {st,norm}=ST;
+  if(!norm.jb){ $('normTable').innerHTML=''; $('normNote').textContent='資料筆數不足（需 ≥ 4）無法進行常態性檢定。'; return; }
+  const rl=p=>p<0.05?'<span class="badv">拒絕常態</span>':'<span class="sig">不拒絕常態</span>';
+  let html='<thead><tr><th>檢定方法</th><th>統計量</th><th>p 值</th><th>結論 (α=0.05)</th></tr></thead><tbody>'+
+    '<tr><td>Jarque-Bera</td><td class="mono">'+fmt(norm.jb.stat,4)+'</td><td class="mono">'+pTag(norm.jb.p)+'</td><td>'+rl(norm.jb.p)+'</td></tr>'+
+    '<tr><td>Anderson-Darling (A²*)</td><td class="mono">'+fmt(norm.ad.stat,4)+'</td><td class="mono">'+pTag(norm.ad.p)+'</td><td>'+rl(norm.ad.p)+'</td></tr>'+
+    '<tr><td>偏態 Z 檢定 (G1='+fmt(norm.skew.stat,3)+')</td><td class="mono">'+fmt(norm.skew.z,3)+'</td><td class="mono">'+pTag(norm.skew.p)+'</td><td>'+(norm.skew.p<0.05?'<span class="badv">明顯偏態</span>':'<span class="sig">對稱</span>')+'</td></tr>'+
+    '<tr><td>峰態 Z 檢定 (G2='+fmt(norm.kurt.stat,3)+')</td><td class="mono">'+fmt(norm.kurt.z,3)+'</td><td class="mono">'+pTag(norm.kurt.p)+'</td><td>'+(norm.kurt.p<0.05?'<span class="badv">異常峰態</span>':'<span class="sig">常態峰</span>')+'</td></tr>'+
+    '</tbody>';
+  $('normTable').innerHTML=html;
+
+  const normalish = norm.ad.p>0.05 && norm.jb.p>0.05;
+  let msg = normalish
+    ? '多數檢定不拒絕常態假設 → 資料大致符合<b>常態分配</b>，可安心使用 t 檢定、ANOVA 等參數方法。'
+    : '至少一項檢定拒絕常態假設 → 資料<b>偏離常態</b>。建議改用無母數方法（Mann-Whitney、Kruskal-Wallis）或對資料做轉換。';
+  msg += ' 形狀：' + (Math.abs(st.skewP)<0.5?'接近對稱':(st.skewP>0?'右偏（正偏）':'左偏（負偏）'))
+       + '，' + (st.kurtP>0.5?'尖峰厚尾':(st.kurtP<-0.5?'平坦輕尾':'峰度接近常態')) + '。';
+  $('normNote').innerHTML=msg;
+}
+
+/* =========================================================================
+   6. 可信度評分
+   ========================================================================= */
+function computeCredibility(){
+  const {st,norm,reg,validity,Y}=ST;
+  const n=st.n;
+
+  // 1) 樣本充足度
+  let sample;
+  if(n>=200)sample=100; else if(n>=100)sample=92; else if(n>=50)sample=82;
+  else if(n>=30)sample=72; else if(n>=15)sample=55; else if(n>=8)sample=40; else sample=22;
+
+  // 2) 資料完整度
+  const complete=Math.round(validity*100);
+
+  // 3) 離群值控制
+  const oratio=st.outliersIQR.length/n;
+  const outlier=Math.max(0,Math.round(100-Math.min(100,oratio*100*4)));
+
+  // 4) 常態性
+  let normality=50;
+  if(norm.ad){
+    const p=norm.ad.p;
+    if(p>=0.15)normality=100; else if(p>=0.05)normality=80;
+    else if(p>=0.01)normality=50; else normality=25;
+  }
+
+  // 5) 結構訊號：成對資料看模型解釋力；單變數看資料穩定性 (CV)
+  let model, modelLabel;
+  if(ST.isPairs && reg){
+    model=Math.round(Math.max(0,Math.min(100,reg.r2*100)));
+    modelLabel='模型解釋力 R²';
+  } else {
+    const cv=Math.abs(st.cv);
+    model=Math.round(Math.max(0,Math.min(100,100-(Number.isFinite(cv)?cv:1)*100)));
+    modelLabel='資料穩定性';
+  }
+
+  const parts=[
+    ['樣本充足度',sample,0.30],
+    ['資料完整度',complete,0.20],
+    ['離群值控制',outlier,0.20],
+    ['常態性',normality,0.15],
+    [modelLabel,model,0.15]
+  ];
+  const total=Math.round(parts.reduce((s,p)=>s+p[1]*p[2],0));
+  return {parts,total,sample,complete,outlier,normality,model};
+}
+
+function credColor(score){
+  if(score>=85) return '#16a34a';
+  if(score>=70) return '#2563eb';
+  if(score>=55) return '#f59e0b';
+  return '#dc2626';
+}
+function credLabel(score){
+  if(score>=85) return '極高可信';
+  if(score>=70) return '高可信';
+  if(score>=55) return '中等可信';
+  if(score>=40) return '偏低可信';
+  return '低可信';
+}
+
+function renderCred(){
+  if(!ST){
+    $('gauge').style.setProperty('--p',0);
+    $('gauge').style.setProperty('--c','#9ca3af');
+    $('gaugeVal').textContent='—';
+    $('credLevel').textContent='—';
+    $('subscores').innerHTML=''; $('credReport').innerHTML=''; $('credNote').innerHTML='';
+    return;
+  }
+  const c=computeCredibility();
+  ST.credScore=c;
+  const col=credColor(c.total);
+  const g=$('gauge');
+  g.style.setProperty('--p',c.total);
+  g.style.setProperty('--c',col);
+  $('gaugeVal').textContent=c.total;
+  $('gaugeVal').style.color=col;
+  $('credLevel').textContent=credLabel(c.total);
+  $('credLevel').className='pill';
+
+  $('subscores').innerHTML=c.parts.map(p=>{
+    const v=p[1];
+    return '<div class="sub"><span>'+p[0]+'</span><span class="bar"><i style="width:'+v+'%;background:linear-gradient(90deg,'+credColor(v)+','+credColor(v)+')"></i></span><span class="sv">'+v+'</span></div>';
+  }).join('');
+
+  // 報告
+  const {st,norm,reg}=ST;
+  const items=[];
+  const add=(ok,txt)=>items.push({ok,txt});
+
+  if(st.n>=30) add(true,'樣本數 n='+st.n+'，達到中央極限定理適用門檻（n≥30），抽樣分配趨近常態。');
+  else add(false,'樣本數僅 n='+st.n+'，低於 30，估計不穩定。生物／社會研究中 n≥30 為最低建議，n≥100 更佳。');
+
+  add(ST.validity>=0.99, '資料完整度 '+((ST.validity*100).toFixed(1))+'%'+(ST.validity<0.99?'（存在無法解析的 token）':'，無缺漏。'));
+
+  if(st.outliersIQR.length===0) add(true,'以 IQR 法未偵測到離群值，資料結構乾淨。');
+  else add(false,'偵測到 '+st.outliersIQR.length+' 個離群值（'+st.outliersIQR.map(v=>fmt(v,3)).join(', ')+'），可能扭曲平均數與回歸結果。');
+
+  if(norm.ad){
+    if(norm.ad.p>=0.05) add(true,'常態性檢定 p='+fp(norm.ad.p)+'，不拒絕常態分配，參數統計方法適用。');
+    else add(false,'常態性檢定 p='+fp(norm.ad.p)+'，資料偏離常態，平均值以外的指標（中位數）更可信。');
+  }
+
+  const ciW=st.ci95[1]-st.ci95[0];
+  const relW=st.mean!==0?ciW/Math.abs(st.mean):NaN;
+  if(Number.isFinite(relW) && relW<0.2) add(true,'平均數 95% 信賴區間寬度僅為平均值的 '+(relW*100).toFixed(1)+'%，估計相當精確。');
+  else if(Number.isFinite(relW)) add(false,'平均數 95% 信賴區間寬度為平均值的 '+(relW*100).toFixed(1)+'%，估計精確度有限。');
+
+  if(ST.isPairs && reg){
+    if(reg.r2>=0.7) add(true,'回歸模型 R²='+fmt(reg.r2,3)+'，解釋力良好，X 對 Y 具有可靠預測性。');
+    else add(false,'回歸模型 R²='+fmt(reg.r2,3)+'，解釋力不足，預測時應保守解讀。');
+  } else if(reg){
+    if(reg.pval[1]<0.05) add(false,'偵測到顯著趨勢（斜率 p='+fp(reg.pval[1])+'），資料隨序號系統性變化，單一平均數可能無法代表整體。');
+    else add(true,'序列無顯著趨勢（斜率 p='+fp(reg.pval[1])+'），資料大致穩定，平均數具代表性。');
+  }
+
+  $('credReport').innerHTML=items.map(it=>
+    '<div style="display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--line)">'+
+    '<span style="flex:none">'+(it.ok?'✅':'⚠️')+'</span><span>'+it.txt+'</span></div>'
+  ).join('');
+
+  $('credNote').innerHTML='可信度為綜合加權分數：樣本充足度 30%＋資料完整度 20%＋離群值控制 20%＋常態性 15%＋結構訊號 15%。'+
+    '分數為<b>相對參考</b>，實際決策仍須結合領域知識。';
+}
+
+/* =========================================================================
+   7. 圖表引擎 (Canvas)
+   ========================================================================= */
+function prep(id){
+  const c=document.getElementById(id);
+  if(!c) return null;
+  const w=c.clientWidth, h=c.clientHeight;
+  if(w<=0||h<=0) return null;
+  const dpr=window.devicePixelRatio||1;
+  c.width=Math.round(w*dpr); c.height=Math.round(h*dpr);
+  const ctx=c.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  return {ctx,w,h};
+}
+function grid(ctx,w,h,pad){
+  ctx.strokeStyle='#eef0f7'; ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pad.t+(h-pad.t-pad.b)*i/4;
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();
+  }
+}
+function axisText(ctx,w,h,pad,xlab,ylab){
+  ctx.fillStyle='#9aa0b1'; ctx.font='10.5px system-ui,sans-serif';
+  ctx.textAlign='center'; ctx.fillText(xlab,w/2,h-2);
+  ctx.save(); ctx.translate(11,h/2); ctx.rotate(-Math.PI/2); ctx.fillText(ylab,0,0); ctx.restore();
+}
+
+/* ---- 直方圖 + 常態曲線 ---- */
+function drawHist(){
+  const p=prep('histCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  const a=ST.Y, st=ST.st;
+  const pad={l:44,r:14,t:14,b:26};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+
+  // binning (Freedman-Diaconis，退化用 Sturges)
+  let bw=2*st.iqr/Math.cbrt(st.n);
+  if(!isFinite(bw)||bw<=0) bw=st.range/ Math.max(1,Math.ceil(Math.log2(st.n)+1));
+  if(!isFinite(bw)||bw<=0) bw=1;
+  let nb=Math.ceil((st.range||1)/bw);
+  nb=Math.max(5,Math.min(40,nb));
+  const min=st.min, max=st.max===st.min?st.min+1:st.max;
+  bw=(max-min)/nb;
+  const bins=new Array(nb).fill(0);
+  for(const v of a){ let i=Math.floor((v-min)/bw); if(i>=nb)i=nb-1; if(i<0)i=0; bins[i]++; }
+  const maxC=Math.max(...bins,1);
+
+  grid(ctx,w,h,pad);
+  const x=v=>pad.l+(v-min)/(max-min)*plotW;
+  const y=c=>pad.t+plotH-(c/maxC)*plotH;
+
+  for(let i=0;i<nb;i++){
+    const x0=x(min+i*bw), x1=x(min+(i+1)*bw);
+    const g=ctx.createLinearGradient(0,pad.t,0,pad.t+plotH);
+    g.addColorStop(0,'rgba(79,70,229,.85)'); g.addColorStop(1,'rgba(124,58,237,.65)');
+    ctx.fillStyle=g;
+    ctx.fillRect(x0+1,y(bins[i]),Math.max(1,x1-x0-2),pad.t+plotH-y(bins[i]));
+  }
+
+  // 常態曲線
+  if(st.sdS>0){
+    ctx.beginPath(); ctx.strokeStyle='#ef4444'; ctx.lineWidth=2;
+    for(let px=0;px<=plotW;px++){
+      const v=min+(px/plotW)*(max-min);
+      const c=normPdf(v,st.mean,st.sdS)*st.n*bw;
+      const py=y(c);
+      if(px===0)ctx.moveTo(pad.l+px,py); else ctx.lineTo(pad.l+px,py);
+    }
+    ctx.stroke();
+  }
+
+  // y 標籤
+  ctx.fillStyle='#9aa0b1'; ctx.font='10.5px system-ui,sans-serif'; ctx.textAlign='right';
+  for(let i=0;i<=4;i++){ ctx.fillText(Math.round(maxC*(1-i/4)),pad.l-6,pad.t+plotH*i/4+3); }
+  ctx.textAlign='center';
+  for(let i=0;i<=4;i++){ const v=min+(max-min)*i/4; ctx.fillText(fmt(v,2),pad.l+plotW*i/4,pad.t+plotH+14); }
+  axisText(ctx,w,h,pad,'數值','次數');
+}
+
+/* ---- KDE ---- */
+function drawKDE(){
+  const p=prep('kdeCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  const a=ST.Y,st=ST.st;
+  const pad={l:40,r:14,t:14,b:26};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  const lo=st.min-(st.range||1)*0.12, hi=st.max+(st.range||1)*0.12;
+  let hb=0.9*Math.min(st.sdS, st.iqr/1.34||st.sdS)*Math.pow(st.n,-0.2);
+  if(!isFinite(hb)||hb<=0) hb=1;
+  const steps=140;
+  const ys=[];
+  for(let i=0;i<=steps;i++){
+    const x=lo+(hi-lo)*i/steps;
+    let s=0; for(const v of a){ const u=(x-v)/hb; s+=Math.exp(-0.5*u*u); }
+    ys.push(s/(a.length*hb*Math.sqrt(2*Math.PI)));
+  }
+  const maxY=Math.max(...ys,1e-9);
+  grid(ctx,w,h,pad);
+  const X=i=>pad.l+(i/steps)*plotW;
+  const Y=v=>pad.t+plotH-(v/maxY)*plotH*0.94;
+
+  // 填色
+  ctx.beginPath(); ctx.moveTo(X(0),pad.t+plotH);
+  for(let i=0;i<=steps;i++) ctx.lineTo(X(i),Y(ys[i]));
+  ctx.lineTo(X(steps),pad.t+plotH); ctx.closePath();
+  const g=ctx.createLinearGradient(0,pad.t,0,pad.t+plotH);
+  g.addColorStop(0,'rgba(37,99,235,.35)'); g.addColorStop(1,'rgba(37,99,235,.03)');
+  ctx.fillStyle=g; ctx.fill();
+
+  // 線
+  ctx.beginPath();
+  for(let i=0;i<=steps;i++){ const x=X(i),y2=Y(ys[i]); i?ctx.lineTo(x,y2):ctx.moveTo(x,y2); }
+  ctx.strokeStyle='#2563eb'; ctx.lineWidth=2.2; ctx.stroke();
+
+  // 平均/中位數
+  if(st.sdS>0){
+    [[st.mean,'#4f46e5','μ'],[st.med,'#16a34a','Md']].forEach(([v,c])=>{
+      const px=pad.l+((v-lo)/(hi-lo))*plotW;
+      ctx.strokeStyle=c; ctx.setLineDash([4,3]); ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(px,pad.t); ctx.lineTo(px,pad.t+plotH); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle=c; ctx.font='10.5px system-ui'; ctx.textAlign='center';
+      ctx.fillText(c==='#16a34a'?'Md':'μ',px,pad.t+10);
+    });
+  }
+  ctx.fillStyle='#9aa0b1'; ctx.font='10.5px system-ui,sans-serif'; ctx.textAlign='center';
+  for(let i=0;i<=4;i++){ const v=lo+(hi-lo)*i/4; ctx.fillText(fmt(v,2),pad.l+plotW*i/4,pad.t+plotH+14); }
+  axisText(ctx,w,h,pad,'數值','密度');
+}
+
+/* ---- 箱型圖 ---- */
+function drawBox(){
+  const p=prep('boxCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  const st=ST.st;
+  const pad={l:30,r:24,t:26,b:26};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  const cy=pad.t+plotH/2, bh=Math.min(58,plotH*0.5);
+  const loF=Math.min(st.min,st.loFence)- (st.range||1)*0.05;
+  const hiF=Math.max(st.max,st.hiFence)+ (st.range||1)*0.05;
+  const X=v=>pad.l+((v-loF)/((hiF-loF)||1))*plotW;
+
+  grid(ctx,w,h,pad);
+  // 鬚
+  ctx.strokeStyle='#6b7280'; ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.moveTo(X(st.q1),cy); ctx.lineTo(X(st.min),cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(X(st.q3),cy); ctx.lineTo(X(st.max),cy); ctx.stroke();
+  [st.min,st.max].forEach(v=>{ ctx.beginPath(); ctx.moveTo(X(v),cy-bh*0.35); ctx.lineTo(X(v),cy+bh*0.35); ctx.stroke(); });
+  // 箱
+  const g=ctx.createLinearGradient(0,cy-bh/2,0,cy+bh/2);
+  g.addColorStop(0,'rgba(79,70,229,.30)'); g.addColorStop(1,'rgba(79,70,229,.14)');
+  ctx.fillStyle=g; ctx.strokeStyle='#4f46e5'; ctx.lineWidth=1.8;
+  ctx.fillRect(X(st.q1),cy-bh/2,X(st.q3)-X(st.q1),bh);
+  ctx.strokeRect(X(st.q1),cy-bh/2,X(st.q3)-X(st.q1),bh);
+  // 中位數
+  ctx.strokeStyle='#db2777'; ctx.lineWidth=2.6;
+  ctx.beginPath(); ctx.moveTo(X(st.med),cy-bh/2); ctx.lineTo(X(st.med),cy+bh/2); ctx.stroke();
+  // 平均
+  ctx.fillStyle='#16a34a';
+  ctx.beginPath(); ctx.arc(X(st.mean),cy,3.6,0,7); ctx.fill();
+  // 離群值
+  ctx.fillStyle='#dc2626';
+  st.outliersIQR.forEach(v=>{ ctx.beginPath(); ctx.arc(X(v),cy,3.4,0,7); ctx.fill(); });
+
+  // 標籤
+  ctx.font='10.5px system-ui,sans-serif'; ctx.textAlign='center';
+  [[st.q1,'Q1'],[st.med,'Md'],[st.q3,'Q3'],[st.mean,'μ']].forEach(([v,t])=>{
+    ctx.fillStyle=t==='μ'?'#16a34a':(t==='Md'?'#db2777':'#4f46e5');
+    ctx.fillText(t,X(v),cy-bh/2-6);
+  });
+  ctx.fillStyle='#9aa0b1';
+  for(let i=0;i<=4;i++){ const v=loF+(hiF-loF)*i/4; ctx.fillText(fmt(v,2),pad.l+plotW*i/4,pad.t+plotH+14); }
+  axisText(ctx,w,h,pad,'數值','');
+}
+
+/* ---- Q-Q 圖 ---- */
+function drawQQ(){
+  const p=prep('qqCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  const st=ST.st, s=st.sorted, n=st.n;
+  const pad={l:46,r:16,t:14,b:26};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  const th=[]; for(let i=1;i<=n;i++) th.push(normInv((i-0.5)/n));
+  const tmin=th[0],tmax=th[n-1];
+  // 以理論↔實際共構尺度繪製
+  const dmin=Math.min(s[0],st.mean+st.sdS*tmin);
+  const dmax=Math.max(s[n-1],st.mean+st.sdS*tmax);
+  const Xv=v=>pad.l+((v-dmin)/((dmax-dmin)||1))*plotW;
+  const Yv=v=>pad.t+plotH-((v-dmin)/((dmax-dmin)||1))*plotH;
+
+  grid(ctx,w,h,pad);
+  // 對角參考線 y=x
+  ctx.strokeStyle='#ef4444'; ctx.lineWidth=1.8;
+  ctx.beginPath(); ctx.moveTo(Xv(dmin),Yv(dmin)); ctx.lineTo(Xv(dmax),Yv(dmax)); ctx.stroke();
+  // 資料點
+  ctx.fillStyle='rgba(79,70,229,.85)';
+  for(let i=0;i<n;i++){
+    const tv=st.mean+st.sdS*th[i];
+    ctx.beginPath(); ctx.arc(Xv(tv),Yv(s[i]),2.9,0,7); ctx.fill();
+  }
+  // 軸標
+  ctx.fillStyle='#9aa0b1'; ctx.font='10.5px system-ui,sans-serif'; ctx.textAlign='center';
+  for(let i=0;i<=4;i++){ const v=dmin+(dmax-dmin)*i/4; ctx.fillText(fmt(v,2),pad.l+plotW*i/4,pad.t+plotH+14); }
+  axisText(ctx,w,h,pad,'理論分位數 (常態)','實際數值');
+}
+
+/* ---- 散布圖 + 迴歸 ---- */
+function drawScatter(){
+  const p=prep('scatterCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  const {X,Y,reg}=ST;
+  const pad={l:46,r:16,t:14,b:28};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  let xmin=Math.min(...X),xmax=Math.max(...X),ymin=Math.min(...Y),ymax=Math.max(...Y);
+  if(xmin===xmax){xmin-=1;xmax+=1;} if(ymin===ymax){ymin-=1;ymax+=1;}
+  const xr=xmax-xmin, yr=ymax-ymin;
+  xmin-=xr*0.06; xmax+=xr*0.06; ymin-=yr*0.08; ymax+=yr*0.08;
+  const Xv=v=>pad.l+((v-xmin)/(xmax-xmin))*plotW;
+  const Yv=v=>pad.t+plotH-((v-ymin)/(ymax-ymin))*plotH;
+
+  grid(ctx,w,h,pad);
+  // 迴歸曲線
+  if(reg){
+    ctx.beginPath(); ctx.strokeStyle='#ef4444'; ctx.lineWidth=2.2;
+    const steps=120;
+    const x0=Math.min(...X), x1=Math.max(...X);
+    for(let i=0;i<=steps;i++){
+      const xv=x0+(x1-x0)*i/steps;
+      let yv=0,pw=1; for(let j=0;j<reg.beta.length;j++){ yv+=reg.beta[j]*pw; pw*=xv; }
+      const px=Xv(xv),py=Yv(yv);
+      i?ctx.lineTo(px,py):ctx.moveTo(px,py);
+    }
+    ctx.stroke();
+  }
+  // 點
+  ctx.fillStyle='rgba(37,99,235,.72)';
+  for(let i=0;i<X.length;i++){
+    ctx.beginPath(); ctx.arc(Xv(X[i]),Yv(Y[i]),3.1,0,7); ctx.fill();
+  }
+  // 軸
+  ctx.fillStyle='#9aa0b1'; ctx.font='10.5px system-ui,sans-serif'; ctx.textAlign='center';
+  for(let i=0;i<=4;i++){ const v=xmin+(xmax-xmin)*i/4; ctx.fillText(fmt(v,2),pad.l+plotW*i/4,pad.t+plotH+15); }
+  ctx.textAlign='right';
+  for(let i=0;i<=4;i++){ const v=ymin+(ymax-ymin)*i/4; ctx.fillText(fmt(v,2),pad.l-6,pad.t+plotH-(plotH*i/4)+3); }
+  axisText(ctx,w,h,pad,'X','Y');
+}
+
+/* ---- 殘差圖 ---- */
+function drawResid(){
+  const p=prep('residCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  const reg = ST && (ST.mult ? ST.mreg : ST.reg);
+  if(!reg){ ctx.fillStyle='#9aa0b1'; ctx.textAlign='center'; ctx.font='13px system-ui';
+    ctx.fillText('資料不足以進行回歸',w/2,h/2); return; }
+  const pad={l:46,r:16,t:14,b:28};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  const fit=reg.fit, res=reg.resid;
+  let fmin=Math.min(...fit),fmax=Math.max(...fit);
+  if(fmin===fmax){fmin-=1;fmax+=1;}
+  const rmax=Math.max(Math.abs(Math.min(...res)),Math.abs(Math.max(...res)),1e-9)*1.15;
+  const Xv=v=>pad.l+((v-fmin)/(fmax-fmin))*plotW;
+  const Yv=v=>pad.t+plotH/2-(v/rmax)*(plotH/2);
+
+  grid(ctx,w,h,pad);
+  ctx.strokeStyle='#cbd2e0'; ctx.lineWidth=1.2; ctx.setLineDash([5,4]);
+  ctx.beginPath(); ctx.moveTo(pad.l,Yv(0)); ctx.lineTo(w-pad.r,Yv(0)); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(245,158,11,.8)';
+  for(let i=0;i<fit.length;i++){ ctx.beginPath(); ctx.arc(Xv(fit[i]),Yv(res[i]),3,0,7); ctx.fill(); }
+
+  ctx.fillStyle='#9aa0b1'; ctx.font='10.5px system-ui,sans-serif'; ctx.textAlign='center';
+  for(let i=0;i<=4;i++){ const v=fmin+(fmax-fmin)*i/4; ctx.fillText(fmt(v,2),pad.l+plotW*i/4,pad.t+plotH+15); }
+  ctx.textAlign='right';
+  [rmax,0,-rmax].forEach(v=>ctx.fillText(fmt(v,2),pad.l-6,Yv(v)+3));
+  axisText(ctx,w,h,pad,'配適值 Ŷ','殘差 e');
+}
+
+/* ---- 信賴區間寬度 ---- */
+function drawCI(){
+  const p=prep('ciCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  const st=ST.st;
+  const rows=[
+    {name:'平均數 95%',lo:st.ci95[0],hi:st.ci95[1],c:'#4f46e5'},
+    {name:'平均數 99%',lo:st.ci99[0],hi:st.ci99[1],c:'#a5b4fc'},
+    {name:'中位數 95%',lo:st.med-1.96*1.253*st.sdS/Math.sqrt(st.n),hi:st.med+1.96*1.253*st.sdS/Math.sqrt(st.n),c:'#16a34a'}
+  ];
+  const pad={l:88,r:20,t:16,b:26};
+  const plotW=w-pad.l-pad.r;
+  const lo=Math.min(...rows.map(r=>r.lo)), hi=Math.max(...rows.map(r=>r.hi));
+  const Xv=v=>pad.l+((v-lo)/((hi-lo)||1))*plotW;
+  const bh=Math.min(30,(h-pad.t-pad.b)/rows.length-14);
+
+  ctx.font='11.5px system-ui,sans-serif';
+  rows.forEach((r,i)=>{
+    const cy=pad.t+(i+0.5)*((h-pad.t-pad.b)/rows.length);
+    ctx.fillStyle='#4b5563'; ctx.textAlign='right';
+    ctx.fillText(r.name,pad.l-8,cy+4);
+    ctx.strokeStyle=r.c; ctx.lineWidth=3; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(Xv(r.lo),cy); ctx.lineTo(Xv(r.hi),cy); ctx.stroke();
+    [r.lo,r.hi].forEach(v=>{ ctx.beginPath(); ctx.moveTo(Xv(v),cy-bh/2); ctx.lineTo(Xv(v),cy+bh/2); ctx.stroke(); });
+    ctx.fillStyle=r.c; ctx.beginPath(); ctx.arc(Xv((r.lo+r.hi)/2),cy,3.6,0,7); ctx.fill();
+  });
+  ctx.fillStyle='#9aa0b1'; ctx.font='10.5px system-ui,sans-serif'; ctx.textAlign='center';
+  for(let i=0;i<=4;i++){ const v=lo+(hi-lo)*i/4; ctx.fillText(fmt(v,3),pad.l+plotW*i/4,h-4); }
+}
+
+/* ---- 可信度子項雷達/條圖 ---- */
+function drawCred(){
+  const p=prep('credCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  const c=ST.credScore; if(!c) return;
+  const pad={l:92,r:24,t:14,b:20};
+  const plotW=w-pad.l-pad.r;
+  const rowH=(h-pad.t-pad.b)/c.parts.length;
+
+  ctx.font='12px system-ui,sans-serif';
+  c.parts.forEach((row,i)=>{
+    const [name,val]=row;
+    const cy=pad.t+(i+0.5)*rowH;
+    const bh=Math.min(20,rowH-14);
+    ctx.fillStyle='#4b5563'; ctx.textAlign='right';
+    ctx.fillText(name,pad.l-9,cy+4);
+    // 底
+    ctx.fillStyle='#eceef6'; roundRect(ctx,pad.l,cy-bh/2,plotW,bh,bh/2); ctx.fill();
+    // 值
+    const col=credColor(val);
+    ctx.fillStyle=col; roundRect(ctx,pad.l,cy-bh/2,Math.max(3,plotW*val/100),bh,bh/2); ctx.fill();
+    // 分數
+    ctx.fillStyle=col; ctx.textAlign='left'; ctx.font='bold 12px system-ui';
+    ctx.fillText(val,pad.l+Math.max(3,plotW*val/100)+7,cy+4);
+    ctx.font='12px system-ui,sans-serif';
+  });
+  // 刻度
+  ctx.fillStyle='#c3c8d6'; ctx.font='10px system-ui'; ctx.textAlign='center';
+  for(let i=0;i<=4;i++) ctx.fillText(String(i*25),pad.l+plotW*i/4,h-4);
+}
+function roundRect(ctx,x,y,w,h,r){
+  r=Math.min(r,h/2,w/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+/* ---- 依分頁渲染 ---- */
+function renderActiveCharts(){
+  const tab=document.querySelector('.tab.active');
+  if(!tab) return;
+  const t=tab.dataset.tab;
+  requestAnimationFrame(()=>{
+    if(ST){
+      if(t==='est') drawCI();
+      if(t==='reg'){ if(ST.mult){ drawScatterMatrix(); } else { drawScatter(); } drawResid(); }
+      if(t==='dist'){ drawHist(); drawKDE(); drawBox(); drawQQ(); }
+      if(t==='cred') drawCred();
+    }
+    if(t==='tail') drawTail();
+    if(t==='anova') drawAnovaBox();
+  });
+}
+
+/* =========================================================================
+   8. 分配尾端 (Left / Right Tail) 工具
+   ========================================================================= */
+function tailModel(){
+  const d=$('tailDist').value;
+  const df1=Math.max(1,parseFloat($('tailDf1').value)||10);
+  const df2=Math.max(1,parseFloat($('tailDf2').value)||10);
+  const mu=parseFloat($('tailMu').value)||0;
+  const sd=Math.max(1e-6,parseFloat($('tailSd').value)||1);
+  if(d==='t') return {name:'t 分配（ν='+fmt(df1,3)+'）',cdf:x=>tCdf(x,df1),pdf:x=>tPdf(x,df1),inv:p=>tInv(p,df1)};
+  if(d==='chi2') return {name:'卡方分配 χ²（ν='+fmt(df1,3)+'）',cdf:x=>chi2cdf(x,df1),pdf:x=>chi2pdf(x,df1),inv:p=>chi2inv(p,df1)};
+  if(d==='f') return {name:'F 分配（ν₁='+fmt(df1,3)+', ν₂='+fmt(df2,3)+'）',cdf:x=>fCdf(x,df1,df2),pdf:x=>fPdf(x,df1,df2),inv:p=>fInv(p,df1,df2)};
+  return {name:'常態分配 N(μ='+fmt(mu,3)+', σ='+fmt(sd,3)+')',cdf:x=>normCdf(x,mu,sd),pdf:x=>normPdf(x,mu,sd),inv:p=>mu+sd*normInv(p)};
+}
+function tailParamsUI(){
+  const d=$('tailDist').value;
+  $('tbDf2').classList.toggle('hid',d!=='f');
+  const l1=$('tbDf1').querySelector('label');
+  if(l1) l1.textContent = d==='f'?'ν₁':'自由度 ν';
+  $('tbDf1').classList.toggle('hid',d==='normal');
+  $('tbMu').classList.toggle('hid',d!=='normal');
+  $('tbSd').classList.toggle('hid',d!=='normal');
+}
+function computeTail(){
+  const m=tailModel();
+  let x=parseFloat($('tailX').value);
+  if(!isFinite(x)) x=0;
+  const left=Math.max(0,Math.min(1,m.cdf(x)));
+  const right=1-left;
+  const d=$('tailDist').value;
+  const two=(d==='normal'||d==='t')?Math.min(1,2*Math.min(left,right)):Math.min(1,right);
+  $('tailTable').innerHTML=
+    '<thead><tr><th>項目</th><th>機率</th></tr></thead><tbody>'+
+    '<tr><td>左尾　P(X ≤ '+fmt(x,3)+')</td><td class="mono" style="font-weight:700">'+fmt(left,6)+'（'+(left*100).toFixed(3)+'%）</td></tr>'+
+    '<tr><td>右尾　P(X ≥ '+fmt(x,3)+')</td><td class="mono" style="color:#dc2626">'+fmt(right,6)+'（'+(right*100).toFixed(3)+'%）</td></tr>'+
+    '<tr><td>雙尾　P(|X| ≥ '+fmt(Math.abs(x),3)+')</td><td class="mono">'+fmt(two,6)+'（'+(two*100).toFixed(3)+'%）</td></tr>'+
+    '</tbody>';
+  const alphas=[0.10,0.05,0.025,0.01,0.005];
+  let qh='<thead><tr><th>α</th><th>Q(α) 左尾點</th><th>Q(1−α) 右尾點</th><th>雙尾臨界 Q(1−α/2)</th></tr></thead><tbody>';
+  for(const a of alphas){
+    qh+='<tr><td>'+fmt(a,3)+'</td><td class="mono">'+fmt(m.inv(a),4)+'</td><td class="mono">'+fmt(m.inv(1-a),4)+'</td><td class="mono">'+fmt(m.inv(1-a/2),4)+'</td></tr>';
+  }
+  $('tailQuantTable').innerHTML=qh+'</tbody>';
+  $('tailNote').innerHTML='分配：'+m.name+'　｜　當前 x = '+fmt(x,4)+'。<b>「α」欄</b>為右尾面積；臨界值表適用於單尾 / 雙尾檢定的標準查表值。';
+  drawTail();
+}
+function drawTail(){
+  const p=prep('tailCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  const m=tailModel();
+  let x=parseFloat($('tailX').value); if(!isFinite(x)) x=0;
+  let lo=m.inv(0.0005), hi=m.inv(0.9995);
+  if(!isFinite(lo)||!isFinite(hi)||lo>=hi){ lo=x-8; hi=x+8; }
+  if(x<lo) lo=x-(hi-lo)*0.1;
+  if(x>hi) hi=x+(hi-lo)*0.1;
+  const steps=240, vals=[]; let peak=0;
+  for(let i=0;i<=steps;i++){ const v=lo+(hi-lo)*i/steps; const y=m.pdf(v); vals.push({v,y}); if(y>peak)peak=y; }
+  if(!(peak>0)) peak=1;
+  const pad={l:10,r:12,t:24,b:24};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  const Xv=v=>pad.l+((v-lo)/(hi-lo))*plotW;
+  const Yv=y=>pad.t+plotH-(y/(peak*1.12))*plotH;
+  grid(ctx,w,h,pad);
+  ctx.strokeStyle='#c3c8d6'; ctx.beginPath(); ctx.moveTo(pad.l,pad.t+plotH); ctx.lineTo(w-pad.r,pad.t+plotH); ctx.stroke();
+  // 左尾填色
+  ctx.beginPath(); ctx.moveTo(Xv(lo),pad.t+plotH);
+  let hit=false;
+  for(let i=0;i<=steps;i++){
+    if(vals[i].v>x && !hit){ hit=true; ctx.lineTo(Xv(x),Yv(vals[i].y)); }
+    if(!hit) ctx.lineTo(Xv(vals[i].v),Yv(vals[i].y));
+  }
+  ctx.lineTo(Xv(x),pad.t+plotH); ctx.closePath();
+  ctx.fillStyle='rgba(79,70,229,.42)'; ctx.fill();
+  // 右尾填色
+  ctx.beginPath(); ctx.moveTo(Xv(x),pad.t+plotH);
+  hit=false;
+  for(let i=0;i<=steps;i++){
+    if(vals[i].v>=x) hit=true;
+    if(hit) ctx.lineTo(Xv(vals[i].v),Yv(vals[i].y));
+  }
+  ctx.lineTo(Xv(hi),pad.t+plotH); ctx.closePath();
+  ctx.fillStyle='rgba(220,38,38,.36)'; ctx.fill();
+  // 曲線
+  ctx.beginPath();
+  for(let i=0;i<=steps;i++){ const px=Xv(vals[i].v),py=Yv(vals[i].y); i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
+  ctx.strokeStyle='#4f46e5'; ctx.lineWidth=2; ctx.stroke();
+  // x 標線
+  ctx.strokeStyle='#16a34a'; ctx.setLineDash([5,4]); ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.moveTo(Xv(x),pad.t); ctx.lineTo(Xv(x),pad.t+plotH+2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#9aa0b1'; ctx.font='10.5px system-ui,sans-serif'; ctx.textAlign='center';
+  for(let i=0;i<=4;i++){ const v=lo+(hi-lo)*i/4; ctx.fillText(fmt(v,2),pad.l+plotW*i/4,h-6); }
+  ctx.textAlign='left'; ctx.fillStyle='#16a34a';
+  ctx.fillText('x = '+fmt(x,4),Math.min(Xv(x)+4,w-90),pad.t+9);
+}
+
+/* =========================================================================
+   8b. 單因子變異數分析 ANOVA
+   ========================================================================= */
+let ANN=null;
+function parseAnovaGroups(text){
+  const groups=[];
+  for(const line of text.split(/\r?\n/)){
+    const t=line.trim(); if(!t) continue;
+    let parts=t.split(/[,;|\t]+/).map(s=>s.trim()).filter(Boolean);
+    if(parts.length===1) parts=t.split(/\s+/).filter(Boolean);
+    if(!parts.length) continue;
+    const nums=parts.map(Number).filter(isFinite);
+    if(nums.length>=2) groups.push(nums);
+  }
+  return groups;
+}
+function oneWayAnova(groups){
+  const k=groups.length;
+  const counts=groups.map(g=>g.length);
+  const means=groups.map(g=>S.mean(g));
+  const vars=groups.map(g=>S.variance(g));
+  const nTot=counts.reduce((a,b)=>a+b,0);
+  const all=[].concat(...groups);
+  const grand=all.reduce((s,v)=>s+v,0)/nTot;
+  const ssb=means.reduce((s,m,i)=>s+counts[i]*(m-grand)**2,0);
+  const ssw=groups.reduce((s,g,i)=>s+g.reduce((ss,v)=>ss+(v-means[i])**2,0),0);
+  const sst=ssb+ssw;
+  const dfb=k-1, dfw=nTot-k, dft=nTot-1;
+  const msb=ssb/dfb, msw=dfw>0?ssw/dfw:NaN;
+  const F=(msw>0&&msb>=0)?msb/msw:NaN;
+  const p=isFinite(F)?1-fCdf(F,dfb,dfw):NaN;
+  const eta2=sst>0?ssb/sst:NaN;
+  // Levene W（用平均數）
+  const zgroups=groups.map((g,i)=>g.map(v=>Math.abs(v-means[i])));
+  const zn=zgroups.map(g=>g.length);
+  const zmeans=zgroups.map(g=>S.mean(g));
+  const zgrand=zgroups.flat().reduce((s,v)=>s+v,0)/nTot;
+  const num2=(nTot-k)/(k-1)*zmeans.reduce((s,zm,i)=>s+zn[i]*(zm-zgrand)**2,0);
+  const denom=zgroups.reduce((s,g,i)=>s+g.reduce((ss,v)=>ss+(v-zmeans[i])**2,0),0);
+  const W=denom>0?num2/denom:NaN;
+  const pLev=isFinite(W)?1-fCdf(W,k-1,nTot-k):NaN;
+  return {k,counts,means,vars,nTot,grand,ssb,ssw,sst,dfb,dfw,dft,msb,msw,F,p,eta2,W,pLev,groups};
+}
+function renderAnova(){
+  const groups=parseAnovaGroups($('anovaInput').value);
+  $('tukeyCard').style.display='none';
+  if(groups.length<2){
+    $('anovaTable').innerHTML='<div class="empty">請輸入至少 2 組資料（每行一組、組內逗號分隔）。</div>';
+    $('anovaNote').textContent=''; $('anovaGroupTable').innerHTML=''; ANN=null; drawAnovaBox(); return;
+  }
+  const a=oneWayAnova(groups);
+  ANN=a;
+  $('anovaTable').innerHTML=
+    '<thead><tr><th>來源</th><th>SS</th><th>df</th><th>MS</th><th>F</th><th>p 值</th></tr></thead><tbody>'+
+    '<tr><td>組間 Between</td><td class="mono">'+fmt(a.ssb,4)+'</td><td class="mono">'+a.dfb+'</td><td class="mono">'+fmt(a.msb,4)+'</td>'+
+      '<td class="mono" rowspan="2" style="text-align:center">'+fmt(a.F,4)+'</td><td class="mono" rowspan="2" style="text-align:center">'+pTag(a.p)+'</td></tr>'+
+    '<tr><td>組內 Within (誤差)</td><td class="mono">'+fmt(a.ssw,4)+'</td><td class="mono">'+a.dfw+'</td><td class="mono">'+fmt(a.msw,4)+'</td></tr>'+
+    '<tr><td>總計 Total</td><td class="mono">'+fmt(a.sst,4)+'</td><td class="mono">'+a.dft+'</td><td></td><td></td><td></td></tr>'+
+    '</tbody>';
+  $('anovaNote').innerHTML='F('+a.dfb+', '+a.dfw+') = '+fmt(a.F,4)+'，p = '+fp(a.p)
+    +(a.p<0.05?' → <b class="sig">拒絕 H₀，各組平均數有顯著差異</b>。':' → <span class="nsig">不拒絕 H₀</span>，各組平均數無顯著差異。')
+    +'　效果量 η² = '+fmt(a.eta2,3)
+    +'<br>Levene 變異齊一性檢定：W('+a.k+', '+(a.nTot-a.k)+') = '+fmt(a.W,3)+'（p='+fp(a.pLev)+'）'
+    +(a.pLev<0.05?'　⚠️ 變異數不齊，建議改採 Welch 或 Kruskal-Wallis。':'　變異數齊一，ANOVA 假設成立。');
+  let gh='<thead><tr><th>組別</th><th>n</th><th>平均</th><th>標準差</th><th>變異數</th></tr></thead><tbody>';
+  for(let i=0;i<a.k;i++){
+    gh+='<tr><td>組 '+(i+1)+'</td><td class="mono">'+a.counts[i]+'</td><td class="mono">'+fmt(a.means[i],4)+'</td><td class="mono">'+fmt(Math.sqrt(a.vars[i]),4)+'</td><td class="mono">'+fmt(a.vars[i],4)+'</td></tr>';
+  }
+  $('anovaGroupTable').innerHTML=gh+'</tbody>';
+  // Tukey HSD
+  if(a.dfb>=2 && isFinite(a.F)){
+    const qCrit=studentizedRangeInv(0.95,a.k,a.dfw);
+    let th='<thead><tr><th>比較</th><th>平均差</th><th>q 值</th><th>q 臨界 .05</th><th>p 值</th><th>結論</th></tr></thead><tbody>';
+    for(let i=0;i<a.k;i++){
+      for(let j=i+1;j<a.k;j++){
+        const diff=a.means[i]-a.means[j];
+        const se=Math.sqrt(a.msw/2*(1/a.counts[i]+1/a.counts[j]));
+        const q=se>0?Math.abs(diff)/se:NaN;
+        const pp=isFinite(q)?1-studentizedRangeCdf(q,a.k,a.dfw):NaN;
+        th+='<tr><td>組 '+(i+1)+' vs 組 '+(j+1)+'</td><td class="mono">'+fmt(diff,4)+'</td><td class="mono">'+fmt(q,4)+'</td><td class="mono">'+fmt(qCrit,4)+'</td><td class="mono">'+pTag(pp)+'</td><td>'+(pp<0.05?'<span class="sig">顯著不同</span>':'<span class="nsig">無顯著差異</span>')+'</td></tr>';
+      }
+    }
+    $('tukeyTable').innerHTML=th+'</tbody>';
+    $('tukeyCard').style.display='block';
+  }
+  drawAnovaBox();
+}
+function drawAnovaBox(){
+  const p=prep('anovaBoxCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  if(!ANN){ ctx.fillStyle='#9aa0b1'; ctx.textAlign='center'; ctx.font='12px system-ui,sans-serif'; ctx.fillText('先輸入各組資料並按「計算 ANOVA」',w/2,h/2); return; }
+  const g=ANN.groups,k=g.length;
+  const pad={l:44,r:14,t:18,b:24};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  const all=[].concat(...g);
+  let lo=Math.min(...all),hi=Math.max(...all);
+  if(lo===hi){lo-=1;hi+=1;}
+  const rr=hi-lo; lo-=rr*0.08; hi+=rr*0.08;
+  const Xv=v=>pad.l+((v-lo)/(hi-lo))*plotW;
+  const rowH=plotH/k;
+  const colors=['#4f46e5','#16a34a','#dc2626','#f59e0b','#2563eb','#9333ea','#0d9488','#db2777'];
+  for(let i=0;i<k;i++){
+    const cy=pad.t+rowH*(i+0.5), bh=Math.min(34,rowH*0.55);
+    const s=[...g[i]].sort((a,b)=>a-b);
+    const q1=S.quantile(s,0.25), med=S.quantile(s,0.5), q3=S.quantile(s,0.75);
+    const iqr=q3-q1, loF=q1-1.5*iqr, hiF=q3+1.5*iqr;
+    const inl=s.filter(v=>v>=loF&&v<=hiF);
+    const wlo=inl[0]||q1, whi=inl[inl.length-1]||q3;
+    const col=colors[i%colors.length];
+    ctx.strokeStyle='#6b7280'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(Xv(wlo),cy); ctx.lineTo(Xv(q1),cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(Xv(q3),cy); ctx.lineTo(Xv(whi),cy); ctx.stroke();
+    [wlo,whi].forEach(v=>{ ctx.beginPath(); ctx.moveTo(Xv(v),cy-bh*0.3); ctx.lineTo(Xv(v),cy+bh*0.3); ctx.stroke(); });
+    ctx.fillStyle=col+'55'; ctx.strokeStyle=col; ctx.lineWidth=1.6;
+    ctx.fillRect(Xv(q1),cy-bh/2,Xv(q3)-Xv(q1),bh);
+    ctx.strokeRect(Xv(q1),cy-bh/2,Xv(q3)-Xv(q1),bh);
+    ctx.strokeStyle='#1f2430'; ctx.lineWidth=2.2;
+    ctx.beginPath(); ctx.moveTo(Xv(med),cy-bh/2); ctx.lineTo(Xv(med),cy+bh/2); ctx.stroke();
+    ctx.fillStyle='#dc2626';
+    s.filter(v=>v<loF||v>hiF).forEach(v=>{ ctx.beginPath(); ctx.arc(Xv(v),cy,3,0,7); ctx.fill(); });
+    ctx.fillStyle='#9aa0b1'; ctx.font='11px system-ui,sans-serif'; ctx.textAlign='right';
+    ctx.fillText('組 '+(i+1),pad.l-6,cy+4);
+  }
+  ctx.fillStyle='#9aa0b1'; ctx.font='10.5px system-ui,sans-serif'; ctx.textAlign='center';
+  for(let i=0;i<=4;i++){ const v=lo+(hi-lo)*i/4; ctx.fillText(fmt(v,2),pad.l+plotW*i/4,h-4); }
+}
+
+/* =========================================================================
+   8c. 複迴歸散布圖矩陣 + 檔案上傳
+   ========================================================================= */
+function simpleLR(xs,ys){
+  const n=Math.min(xs.length,ys.length);
+  if(n<2) return {b0:0,b1:0};
+  const mx=S.mean(xs),my=S.mean(ys);
+  let sxy=0,sxx=0;
+  for(let i=0;i<n;i++){ const dx=xs[i]-mx; sxy+=dx*(ys[i]-my); sxx+=dx*dx; }
+  const b1=sxx>0?sxy/sxx:0;
+  return {b0:my-b1*mx,b1};
+}
+function drawScatterMatrix(){
+  const p=prep('scatterCanvas'); if(!p) return;
+  const {ctx,w,h}=p;
+  const subs=[
+    {x:ST.X,y:ST.Y,name:'Y ↔ X',fit:true},
+    {x:ST.X,y:ST.Z,name:'Z ↔ X',fit:false},
+    {x:ST.Z,y:ST.Y,name:'Y ↔ Z',fit:true}
+  ];
+  const pad={l:26,r:10,t:26,b:28};
+  const plotW=w-pad.l-pad.r, plotH=h-pad.t-pad.b;
+  const cw=plotW/3;
+  grid(ctx,w,h,pad);
+  subs.forEach((s,si)=>{
+    const x0=pad.l+si*cw;
+    let xmin=Math.min(...s.x),xmax=Math.max(...s.x),ymin=Math.min(...s.y),ymax=Math.max(...s.y);
+    if(xmin===xmax){xmin-=1;xmax+=1;} if(ymin===ymax){ymin-=1;ymax+=1;}
+    const Xv=v=>x0+((v-xmin)/(xmax-xmin))*(cw-12);
+    const Yv=v=>pad.t+plotH-((v-ymin)/(ymax-ymin))*plotH;
+    ctx.strokeStyle='#dde1ee'; ctx.lineWidth=1;
+    ctx.strokeRect(x0,pad.t,cw-10,plotH);
+    if(s.fit){
+      const lr=simpleLR(s.x,s.y);
+      ctx.strokeStyle='#ef4444'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(Xv(xmin),Yv(lr.b0+lr.b1*xmin)); ctx.lineTo(Xv(xmax),Yv(lr.b0+lr.b1*xmax)); ctx.stroke();
+    }
+    ctx.fillStyle='rgba(37,99,235,.75)';
+    for(let i=0;i<s.x.length;i++){ ctx.beginPath(); ctx.arc(Xv(s.x[i]),Yv(s.y[i]),3,0,7); ctx.fill(); }
+    ctx.fillStyle='#4b5563'; ctx.font='12px system-ui,sans-serif'; ctx.textAlign='center';
+    ctx.fillText(s.name,x0+(cw-10)/2,pad.t-6);
+    const r=pearson(s.x,s.y);
+    ctx.fillStyle='#dc2626'; ctx.font='10.5px system-ui,sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText('r='+fmt(r,3),x0+(cw-10)/2,pad.t+9);
+    // ticks
+    ctx.fillStyle='#9aa0b1'; ctx.font='9.5px system-ui,sans-serif';
+    for(let i=0;i<=2;i++){
+      const xv=xmin+(xmax-xmin)*i/2;
+      ctx.textAlign='center';
+      ctx.fillText(fmt(xv,1),x0+(cw-12)*i/2,pad.t+plotH+13);
+      const yv=ymin+(ymax-ymin)*i/2;
+      ctx.textAlign='right';
+      ctx.fillText(fmt(yv,1),x0-3,pad.t+plotH-(plotH*i/2)+3);
+    }
+  });
+  axisText(ctx,w,h,pad,'自變數 (X / Z)','應變數 (Y)');
+}
+function parseColumns(text){
+  const rows=[]; let header=0;
+  for(const line of text.split(/\r?\n/)){
+    const t=line.trim(); if(!t) continue;
+    let parts=t.split(/[,;\t]/).map(s=>s.trim()).filter(Boolean);
+    if(parts.length===1) parts=t.split(/\s+/).filter(Boolean);
+    if(!parts.length) continue;
+    const lead=Number(parts[0]);
+    if(!isFinite(lead)&&rows.length===0){ header++; continue; }
+    if(!isFinite(lead)){ header++; continue; }
+    const nums=parts.map(Number).filter(isFinite);
+    if(nums.length) rows.push(nums);
+  }
+  const w=rows.length?Math.max(...rows.map(r=>r.length)):0;
+  const cols=Array.from({length:w},()=>[]);
+  for(const r of rows) for(let c=0;c<r.length;c++) cols[c].push(r[c]);
+  return cols;
+}
+function handleFile(file){
+  if(!file) return;
+  if(!/\.(csv|txt|tsv)$/i.test(file.name)){ toast('僅支援 .csv / .txt / .tsv 檔案'); return; }
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const cols=parseColumns(reader.result||'');
+    if(!cols.length){ $('fileStatus').textContent='⚠️ 無法從檔案解析出數字'; toast('無法解析檔案內容'); return; }
+    const n=cols[0].length;
+    if(cols.length>=3){
+      setInputMode('splitXYZ');
+      $('xInput').value=cols[0].join('\n'); $('yInput').value=cols[1].join('\n'); $('zInput').value=cols[2].join('\n');
+    } else if(cols.length===2){
+      setInputMode('splitXY');
+      $('xInput').value=cols[0].join('\n'); $('yInput').value=cols[1].join('\n');
+    } else {
+      setInputMode('combined');
+      $('dataInput').value=cols[0].join('\n');
+    }
+    $('fileStatus').textContent='✅ '+file.name+'：讀取 '+cols.length+' 欄 × '+n+' 筆';
+    analyze();
+    toast('已載入 '+file.name);
+  };
+  reader.readAsText(file,'utf-8');
+}
+
+/* =========================================================================
+   9. UI 事件
+   ========================================================================= */
+function toast(msg){
+  const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1800);
+}
+document.getElementById('tabs').addEventListener('click',e=>{
+  const tab=e.target.closest('.tab'); if(!tab) return;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  tab.classList.add('active');
+  document.querySelector('.panel[data-panel="'+tab.dataset.tab+'"]').classList.add('active');
+  renderActiveCharts();
+});
+
+$('runBtn').addEventListener('click',analyze);
+$('clearBtn').addEventListener('click',()=>{
+  ['dataInput','xInput','yInput','zInput','anovaInput','fileStatus'].forEach(id=>{
+    const e=$(id);
+    if(id==='fileStatus') e.textContent=''; else e.value='';
+  });
+  $('fileInput').value=''; ANN=null;
+  $('inputBadge').textContent='等待輸入';
+  ST=null;
+  renderAll();
+  renderActiveCharts();
+  toast('資料已清除');
+});
+$('degSel').addEventListener('change',()=>{ if(ST) analyze(); });
+$('modeSel').addEventListener('change',()=>{ if(ST) analyze(); });
+
+// 輸入方式切換
+document.getElementById('inputModeSeg').addEventListener('click',e=>{
+  const b=e.target.closest('.segbtn'); if(!b) return;
+  setInputMode(b.dataset.im);
+  const split = b.dataset.im==='splitXY'||b.dataset.im==='splitXYZ';
+  const has = split
+    ? ($('xInput').value.trim()||$('yInput').value.trim()||$('zInput').value.trim())
+    : $('dataInput').value.trim();
+  if(has) analyze();
+});
+
+// 分配尾端
+$('tailDist').addEventListener('change',()=>{ tailParamsUI(); computeTail(); });
+['tailDf1','tailDf2','tailMu','tailSd'].forEach(id=>$(id).addEventListener('input',computeTail));
+$('tailX').addEventListener('input',computeTail);
+$('tailLeftQ').addEventListener('click',()=>{
+  const a=Math.min(0.999,Math.max(0.001,parseFloat($('tailArea').value)||0.05));
+  $('tailX').value=fmt(tailModel().inv(a),6); computeTail(); toast('已設 x=Q('+fmt(a,3)+')，即 P(X≤x)='+fmt(a,3));
+});
+$('tailRightQ').addEventListener('click',()=>{
+  const a=Math.min(0.999,Math.max(0.001,parseFloat($('tailArea').value)||0.05));
+  $('tailX').value=fmt(tailModel().inv(1-a),6); computeTail(); toast('已設 x=Q(1−'+fmt(a,3)+')，即 P(X≥x)='+fmt(a,3));
+});
+
+// ANOVA
+$('anovaBtn').addEventListener('click',renderAnova);
+const ANOVADEMOS={
+  1:'5, 6, 7, 6, 5\n8, 9, 7, 8, 9\n11, 12, 10, 11, 12',
+  2:'10, 12, 11, 13, 12\n15, 16, 14, 15\n8, 9, 10, 8, 9, 11\n20, 22, 21'
+};
+document.querySelectorAll('[data-anovademo]').forEach(b=>{
+  b.addEventListener('click',()=>{ $('anovaInput').value=ANOVADEMOS[b.dataset.anovademo]; renderAnova(); });
+});
+
+// 檔案上傳
+const dz=$('dropZone');
+dz.addEventListener('dragover',e=>{ e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault(); dz.classList.remove('over');
+  if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+$('fileBtn').addEventListener('click',()=>$('fileInput').click());
+$('fileInput').addEventListener('change',()=>{
+  if($('fileInput').files && $('fileInput').files[0]) handleFile($('fileInput').files[0]);
+  $('fileInput').value='';
+});
+
+// 範例資料
+const DEMOS={
+  normal:'102\n98\n105\n95\n110\n99\n101\n103\n97\n106\n104\n96\n100\n108\n93\n107\n99\n102\n101\n100',
+  linear:'1, 2.1\n2, 4.3\n3, 5.8\n4, 8.4\n5, 9.9\n6, 12.2\n7, 13.9\n8, 16.5\n9, 18.1\n10, 20.4\n11, 21.8\n12, 24.6',
+  skew:'1\n1\n2\n2\n2\n3\n3\n3\n3\n4\n4\n5\n5\n6\n7\n9\n12\n18\n25\n40',
+  outlier:'12\n13\n14\n12\n15\n13\n14\n12\n13\n14\n15\n13\n120\n12\n14\n13\n15\n14\n13\n12'
+};
+document.querySelectorAll('[data-demo]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    setInputMode('combined');
+    $('dataInput').value=DEMOS[b.dataset.demo];
+    analyze();
+    toast('已載入範例資料');
+  });
+});
+
+// 即時分析 (debounce)
+let dt=null;
+['dataInput','xInput','yInput','zInput'].forEach(id=>{
+  $(id).addEventListener('input',()=>{
+    if(!ST) return;
+    clearTimeout(dt); dt=setTimeout(analyze,450);
+  });
+});
+
+// resize
+let rt=null;
+window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(renderActiveCharts,150); });
+
+// 初始
+setInputMode('combined');
+tailParamsUI();
+computeTail();
+renderAll();
+</script>
+</body>
+</html>
